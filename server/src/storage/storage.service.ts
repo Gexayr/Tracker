@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DeepPartial, Repository } from 'typeorm';
 import { Storage } from './storage.entity';
 import { UpsertStorageDto } from './dto/upsert-storage.dto';
 
@@ -19,11 +19,11 @@ export class StorageService {
     const existing = await this.get(dto.year, dto.month);
     if (existing) {
       existing.payload = dto.payload;
-      // Narrow return type to a single entity (not array)
-      return await this.repo.save(existing as Storage);
+      // Save a single entity
+      return await this.repo.save(existing);
     }
-    const created = this.repo.create(dto as any);
-    // Narrow return type to a single entity (not array)
-    return await this.repo.save(created as Storage);
+    // Create a single entity explicitly (not an array)
+    const created = this.repo.create(dto as DeepPartial<Storage>);
+    return await this.repo.save(created);
   }
 }
