@@ -26,7 +26,7 @@ services:
       DB_PASSWORD: postgres
       DB_NAME: tracker
       PORT: 3001
-      CORS_ORIGIN: http://localhost:3000,http://localhost:8080,http://localhost:80
+      CORS_ORIGIN: http://localhost:3000,http://localhost:8080,http://localhost:80,http://tracking.amsoft.am,https://tracking.amsoft.am
     depends_on:
       db:
         condition: service_healthy
@@ -38,7 +38,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "3000:80"
+      - "80:80"
 
 volumes:
   db_data:
