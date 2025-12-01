@@ -8,7 +8,9 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      # If port 5432 is busy on the host, map a different host port to the container's 5432.
+      # You can override POSTGRES_HOST_PORT env var when running compose.
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
