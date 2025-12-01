@@ -1,0 +1,117 @@
+:root{ --accent:#111827 }
+*{box-sizing:border-box}
+body{font-family:Inter, Roboto, Arial, sans-serif;margin:0;background:#f7fafc;color:#0f1724}
+.wrap{max-width:1200px;margin:18px auto;padding:18px;background:#fff;border-radius:12px;box-shadow:0 8px 28px rgba(2,6,23,0.06)}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px}
+header h1{margin:0;font-size:20px}
+.controls{display:flex;align-items:center;gap:8px}
+.controls button{padding:6px 10px;border-radius:8px;border:1px solid #e6e9ef;background:#fff;cursor:pointer}
+.month-label{min-width:160px;text-align:center;font-weight:600}
+main{display:flex;gap:18px;margin-top:12px}
+.left{width:300px}
+.right{flex:1;overflow:auto}
+.panel{padding:12px;border:1px solid #f1f5f9;border-radius:8px}
+.habit-list{list-style:none;padding:0;margin:0}
+.habit-list li{display:flex;align-items:center;gap:10px;padding:8px 0}
+.dot{width:12px;height:12px;border-radius:50%;display:inline-block}
+.smallbtn{padding:6px 8px;border-radius:8px;border:1px solid #eee;background:#fff;cursor:pointer}
+.add-row{display:flex;gap:8px;margin-top:10px}
+.add-row input{flex:1;padding:8px;border-radius:8px;border:1px solid #e6e9ef}
+.grid-wrap{overflow:auto;margin-top:12px}
+table.grid{width:100%;border-collapse:collapse;font-size:13px}
+table.grid th, table.grid td{border:1px solid #f1f5f9;padding:6px;text-align:center;min-width:30px}
+.day-header{background:#fbfbfb}
+.habit-name{text-align:left;padding-left:12px}
+.cell{cursor:pointer;transition:all .12s}
+.cell.done{color:#fff;font-weight:700}
+.summary-row{display:flex;gap:14px;margin-top:16px;align-items:flex-start}
+.summary{flex:1}
+.summary ul{list-style:none;padding:0;margin:0}
+.summary li{display:flex;align-items:center;gap:8px;padding:8px 0}
+.bar-wrap{flex:1;background:#f1f5f9;height:12px;border-radius:8px;overflow:hidden;margin:0 8px}
+.bar{height:100%;background:#60a5fa}
+.chart-wrap{flex:1;min-width:360px}
+footer{margin-top:18px;text-align:center;color:#9ca3af}
+.legend-row{display:flex;gap:8px;flex-wrap:wrap}
+.legend-item{display:flex;gap:6px;align-items:center;padding:6px 8px;border-radius:8px;background:#fff;border:1px solid #f1f5f9}
+.help{font-size:13px;color:#374151}
+/* ---------- MOBILE (max-width: 768px) ---------- */
+@media (max-width: 768px) {
+
+    .wrap {
+      padding: 10px;
+    }
+  
+    header h1 {
+      font-size: 22px;
+    }
+  
+    .controls {
+      flex-direction: column;
+      gap: 8px;
+    }
+  
+    .month-label {
+      font-size: 18px;
+    }
+  
+    /* Left panel goes on top */
+    main {
+      flex-direction: column;
+    }
+  
+    .left, .right {
+      width: 100%;
+    }
+  
+    /* Make habits list nicer */
+    .habit-list li {
+      padding: 10px;
+      font-size: 15px;
+    }
+  
+    /* Grid becomes scrollable left-right */
+    .grid {
+      font-size: 10px;
+      overflow-x: auto;
+      display: block;
+      white-space: nowrap;
+    }
+  
+    .grid th, .grid td {
+      padding: 4px;
+      min-width: 28px;
+    }
+  
+    .grid .habit-name {
+      min-width: 110px;
+      white-space: normal;
+    }
+  
+    /* Summary stacked */
+    .summary-row {
+      flex-direction: column;
+    }
+  
+    .summary, .chart-wrap {
+      width: 100%;
+      margin-top: 10px;
+    }
+  
+    /* Bars smaller */
+    .bar {
+      height: 10px;
+    }
+  
+    /* Buttons */
+    button, .smallbtn {
+      padding: 8px 12px;
+      font-size: 14px;
+    }
+  
+    input {
+      font-size: 14px;
+      padding: 8px;
+    }
+  }
+  
