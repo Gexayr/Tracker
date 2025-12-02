@@ -28,7 +28,7 @@ services:
       DB_PASSWORD: postgres
       DB_NAME: tracker
       PORT: 3001
-      CORS_ORIGIN: http://localhost:3000,http://localhost:8080,http://localhost:80,http://tracking.amsoft.am,https://tracking.amsoft.am
+      CORS_ORIGIN: http://localhost:3000,http://localhost:8181,http://localhost:80,http://tracking.amsoft.am,https://tracking.amsoft.am
     depends_on:
       db:
         condition: service_healthy
@@ -42,7 +42,9 @@ services:
     depends_on:
       - backend
     ports:
-      - "80:80"
+      # Map container port 80 to a configurable host port to avoid conflicts when 80 is busy on the host.
+      # Override FRONTEND_HOST_PORT when running compose: FRONTEND_HOST_PORT=80 docker compose up -d
+      - "${FRONTEND_HOST_PORT:-8181}:80"
 
 volumes:
   db_data:
