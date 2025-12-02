@@ -33,7 +33,9 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "3001:3001"
+      # Map container port 3001 to a configurable host port to avoid conflicts when 3001 is busy on the host.
+      # Override BACKEND_HOST_PORT when running compose: BACKEND_HOST_PORT=33001 docker compose up -d
+      - "${BACKEND_HOST_PORT:-3002}:3001"
 
   frontend:
     build: ./client
