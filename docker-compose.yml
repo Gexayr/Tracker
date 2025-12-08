@@ -1,15 +1,11 @@
-version: '3.9'
-
 services:
   db:
     image: postgres:15-alpine
     environment:
-      POSTGRES_DB: tracker
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-tracker}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
-      # If port 5432 is busy on the host, map a different host port to the container's 5432.
-      # You can override POSTGRES_HOST_PORT env var when running compose.
       - "${POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
@@ -20,31 +16,53 @@ services:
       retries: 5
 
   backend:
-    build: ./server
+    build:
+      context: ./server
+      dockerfile: Dockerfile.dev
+      args:
+        # Use a registry mirror by default to mitigate Docker Hub TLS timeouts.
+        # Override with NODE_BASE_IMAGE env if you prefer a different tag, e.g. node:20 or node:20-alpine
+        # Examples:
+        #   NODE_BASE_IMAGE=node:20 docker compose build --no-cache
+        #   NODE_BASE_IMAGE=registry.yourcorp.com/library/node:20 docker compose build --no-cache
+        BASE_IMAGE: ${NODE_BASE_IMAGE:-mirror.gcr.io/library/node:20}
+    volumes:
+      - ./server:/app
+      - /app/node_modules
     environment:
+      NODE_ENV: development
       DB_HOST: db
       DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      DB_NAME: tracker
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_NAME: ${POSTGRES_DB:-tracker}
       PORT: 3001
+      JWT_SECRET: ${JWT_SECRET:-change_this_in_prod}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       CORS_ORIGIN: http://localhost:3000,http://localhost:8181,http://localhost:80,http://tracking.amsoft.am,https://tracking.amsoft.am
     depends_on:
       db:
         condition: service_healthy
     ports:
-      # Map container port 3001 to a configurable host port to avoid conflicts when 3001 is busy on the host.
-      # Override BACKEND_HOST_PORT when running compose: BACKEND_HOST_PORT=33001 docker compose up -d
       - "${BACKEND_HOST_PORT:-3002}:3001"
 
   frontend:
-    build: ./client
+    build:
+      context: ./client
+      dockerfile: Dockerfile.dev
+      args:
+        # Use a registry mirror by default to mitigate Docker Hub TLS timeouts.
+        # Override with NODE_BASE_IMAGE env if you prefer a different tag, e.g. node:20 or node:20-alpine
+        BASE_IMAGE: ${NODE_BASE_IMAGE:-mirror.gcr.io/library/node:20}
+    volumes:
+      - ./client:/app
+      - /app/node_modules
     depends_on:
       - backend
     ports:
-      # Map container port 80 to a configurable host port to avoid conflicts when 80 is busy on the host.
-      # Override FRONTEND_HOST_PORT when running compose: FRONTEND_HOST_PORT=80 docker compose up -d
-      - "${FRONTEND_HOST_PORT:-8181}:80"
+      - "${FRONTEND_HOST_PORT:-8181}:3000"
+    environment:
+      NODE_ENV: development
 
 volumes:
   db_data:
