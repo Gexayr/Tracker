@@ -25,17 +25,60 @@ const DEFAULT_HABITS = [
 ];
 
 const API_BASE = process.env.REACT_APP_API_URL || '/api';
+const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
 
-async function apiGet(year, month) {
-  const res = await fetch(`${API_BASE}/storage/${year}/${month}`);
+// ---------- Simple Auth API helpers ----------
+async function apiLogin(email, password) {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  if (!res.ok) {
+    let msg = 'Login failed';
+    try { const j = await res.json(); msg = j?.message || msg; } catch (_) {}
+    throw new Error(Array.isArray(msg) ? msg.join(', ') : msg);
+  }
+  return res.json(); // { user, access_token }
+}
+
+async function apiRegister({ email, password, name }) {
+  const res = await fetch(`${API_BASE}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, name })
+  });
+  if (!res.ok) {
+    let msg = 'Registration failed';
+    try { const j = await res.json(); msg = j?.message || msg; } catch (_) {}
+    throw new Error(Array.isArray(msg) ? msg.join(', ') : msg);
+  }
+  return res.json(); // { user, access_token }
+}
+
+async function apiProfile(token) {
+  const res = await fetch(`${API_BASE}/auth/profile`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Invalid session');
+  return res.json();
+}
+
+async function apiGet(year, month, token) {
+  const res = await fetch(`${API_BASE}/storage/${year}/${month}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
   if (!res.ok) throw new Error('Failed to load');
   return res.json();
 }
 
-async function apiPut(year, month, payload) {
+async function apiPut(year, month, payload, token) {
   const res = await fetch(`${API_BASE}/storage`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify({ year, month, payload }),
   });
   if (!res.ok) throw new Error('Failed to save');
@@ -51,6 +94,10 @@ export default function App() {
   const [data, setData] = useState({});
   const [chartType, setChartType] = useState('line'); // 'line' | 'bar' | 'radar'
   const [showHelp, setShowHelp] = useState(false);
+  const [token, setToken] = useState(() => localStorage.getItem('access_token') || '');
+  const [userEmail, setUserEmail] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authMode, setAuthMode] = useState('login'); // 'login' | 'signup'
 
   // Initialize month data
   const initDefaultMonth = useCallback(() => {
@@ -60,15 +107,38 @@ export default function App() {
     setData(initData);
     setChartType('line');
     // Try to persist to server but don't block UI
-    apiPut(year, month, { habits: DEFAULT_HABITS, data: initData, chartType: 'line' }).catch(() => {});
-  }, [year, month]);
+    if (token) {
+      apiPut(year, month, { habits: DEFAULT_HABITS, data: initData, chartType: 'line' }, token).catch(() => {});
+    }
+  }, [year, month, token]);
+
+  // Load profile if token exists
+  useEffect(() => {
+    let cancelled = false;
+    if (!token) return;
+    (async () => {
+      try {
+        const p = await apiProfile(token);
+        if (!cancelled) setUserEmail(p?.email || '');
+      } catch (e) {
+        console.warn('Profile check failed', e);
+        if (!cancelled) {
+          setUserEmail('');
+          setToken('');
+          localStorage.removeItem('access_token');
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [token]);
 
   // Load from server on mount / when year/month changes
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      if (!token) return; // require login
       try {
-        const response = await apiGet(year, month);
+        const response = await apiGet(year, month, token);
         const payload = response?.payload;
         if (payload && !cancelled) {
           setHabits(payload.habits || DEFAULT_HABITS);
@@ -78,19 +148,26 @@ export default function App() {
         }
         if (!cancelled) initDefaultMonth();
       } catch (e) {
-        console.warn('Falling back to defaults, API not reachable', e);
+        console.warn('Failed to load from API', e);
         if (!cancelled) initDefaultMonth();
       }
     })();
     return () => { cancelled = true; };
-  }, [year, month, initDefaultMonth]);
+  }, [year, month, initDefaultMonth, token]);
 
   // Persist changes to server
   useEffect(() => {
-    apiPut(year, month, { habits, data, chartType }).catch(() => {
+    if (!token) return;
+    apiPut(year, month, { habits, data, chartType }, token).catch(() => {
       // No-op on failure; UI remains responsive
     });
-  }, [habits, data, chartType, year, month]);
+  }, [habits, data, chartType, year, month, token]);
+
+  const handleLogout = () => {
+    setToken('');
+    setUserEmail('');
+    localStorage.removeItem('access_token');
+  };
 
   const toggleDay = (habitId, day) => {
     setData(prev => {
@@ -122,6 +199,93 @@ export default function App() {
     'January','February','March','April','May','June','July','August','September','October','November','December'
   ], []);
 
+  // If not logged in, show auth form
+  if (!token) {
+    return (
+      <div className="auth-wrap">
+        <div className="auth-card">
+          <h1 style={{marginTop:0,marginBottom:8}}>Habit Tracker</h1>
+          <div className="tabs">
+            <button className={authMode==='login'?'active':''} onClick={()=>{setAuthError('');setAuthMode('login');}}>Sign in</button>
+            <button className={authMode==='signup'?'active':''} onClick={()=>{setAuthError('');setAuthMode('signup');}}>Sign up</button>
+          </div>
+
+          {authMode === 'login' ? (
+            <LoginForm
+              error={authError}
+              onSubmit={async (email, password) => {
+                setAuthError('');
+                try {
+                  const res = await apiLogin(email, password);
+                  const t = res?.access_token;
+                  if (t) {
+                    localStorage.setItem('access_token', t);
+                    setToken(t);
+                    setUserEmail(res?.user?.email || email);
+                  } else {
+                    setAuthError('Token not received');
+                  }
+                } catch (e) {
+                  setAuthError(e?.message || 'Login failed');
+                }
+              }}
+            />
+          ) : (
+            <SignUpForm
+              error={authError}
+              onSubmit={async ({ name, email, password }) => {
+                setAuthError('');
+                try {
+                  const res = await apiRegister({ name, email, password });
+                  const t = res?.access_token;
+                  if (t) {
+                    localStorage.setItem('access_token', t);
+                    setToken(t);
+                    setUserEmail(res?.user?.email || email);
+                  } else {
+                    setAuthError('Token not received');
+                  }
+                } catch (e) {
+                  setAuthError(e?.message || 'Registration failed');
+                }
+              }}
+            />
+          )}
+
+          <div className="auth-divider"><span>or</span></div>
+          <GoogleSignIn
+            clientId={GOOGLE_CLIENT_ID}
+            onToken={async (idToken) => {
+              try {
+                const res = await fetch(`${API_BASE}/auth/google`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ idToken })
+                });
+                if (!res.ok) throw new Error('Google auth failed');
+                const data = await res.json();
+                const t = data?.access_token;
+                if (t) {
+                  localStorage.setItem('access_token', t);
+                  setToken(t);
+                  setUserEmail(data?.user?.email || '');
+                } else {
+                  setAuthError('Token not received');
+                }
+              } catch (e) {
+                setAuthError(e?.message || 'Google sign-in failed');
+              }
+            }}
+          />
+
+          {!GOOGLE_CLIENT_ID ? (
+            <p style={{marginTop:8,fontSize:12,opacity:.7}}>Google Sign-In is not configured. Set REACT_APP_GOOGLE_CLIENT_ID and GOOGLE_CLIENT_ID in docker-compose.</p>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="wrap">
       <header>
@@ -142,6 +306,10 @@ export default function App() {
           <button className="smallbtn" onClick={() => setShowHelp(s => !s)}>
             {showHelp ? 'Hide help' : 'Help'}
           </button>
+          <span style={{ marginLeft: 12, fontSize: 12, opacity: 0.8 }}>
+            {userEmail ? `Logged in as ${userEmail}` : ''}
+          </span>
+          <button className="smallbtn" style={{ marginLeft: 8 }} onClick={handleLogout}>Logout</button>
         </div>
       </header>
 
@@ -230,6 +398,134 @@ function AddHabitForm({ onAdd }) {
   );
 }
 
+function LoginForm({ error, onSubmit }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (loading) return;
+    setLoading(true);
+    try {
+      await onSubmit(email.trim(), password);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <input
+        type="email"
+        placeholder="Email"
+        value={email}
+        onChange={e => setEmail(e.target.value)}
+        required
+      />
+      <input
+        type="password"
+        placeholder="Password"
+        value={password}
+        onChange={e => setPassword(e.target.value)}
+        required
+      />
+      {error ? <div style={{ color: 'crimson', fontSize: 13 }}>{error}</div> : null}
+      <button className="smallbtn" type="submit" disabled={loading}>
+        {loading ? 'Signing in…' : 'Login'}
+      </button>
+    </form>
+  );
+}
+
+function SignUpForm({ error, onSubmit }) {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (loading) return;
+    setLoading(true);
+    try {
+      await onSubmit({ name: name.trim() || null, email: email.trim(), password });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <input
+        type="text"
+        placeholder="Full name (optional)"
+        value={name}
+        onChange={e => setName(e.target.value)}
+      />
+      <input
+        type="email"
+        placeholder="Email"
+        value={email}
+        onChange={e => setEmail(e.target.value)}
+        required
+      />
+      <input
+        type="password"
+        placeholder="Password"
+        value={password}
+        onChange={e => setPassword(e.target.value)}
+        required
+      />
+      {error ? <div style={{ color: 'crimson', fontSize: 13 }}>{error}</div> : null}
+      <button className="smallbtn" type="submit" disabled={loading}>
+        {loading ? 'Creating account…' : 'Sign up'}
+      </button>
+    </form>
+  );
+}
+
+function GoogleSignIn({ clientId, onToken }) {
+  const ref = React.useRef(null);
+  useEffect(() => {
+    if (!clientId) return;
+    const id = 'google-identity-services';
+    const existing = document.getElementById(id);
+    const init = () => {
+      // @ts-ignore
+      if (window.google && window.google.accounts && window.google.accounts.id) {
+        // @ts-ignore
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: (response) => {
+            const idToken = response?.credential;
+            if (idToken) onToken(idToken);
+          },
+        });
+        // @ts-ignore
+        window.google.accounts.id.renderButton(ref.current, { theme: 'outline', size: 'large', width: 320 });
+      }
+    };
+    if (existing) {
+      if (existing.getAttribute('data-loaded')) init();
+      else existing.addEventListener('load', init);
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.async = true;
+    s.defer = true;
+    s.id = id;
+    s.onload = () => { s.setAttribute('data-loaded', 'true'); init(); };
+    document.head.appendChild(s);
+    return () => {
+      // no cleanup for global script to avoid reloading
+    };
+  }, [clientId, onToken]);
+
+  return <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}><div ref={ref} /></div>;
+}
+
 function HabitGrid({ year, month, habits, data, onToggle }) {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const weekColors = ['#e8f5e9','#e3f2fd','#fff3e0','#f3e5f5','#fbe9e7'];
@@ -265,7 +561,7 @@ function HabitGrid({ year, month, habits, data, onToggle }) {
               return (
                 <td
                   key={day}
-                  className={done ? 'done' : ''}
+                  className={`cell ${done ? 'done' : ''}`}
                   onClick={() => onToggle(h.id, day)}
                   style={{ background: done ? hexWithAlpha(h.color,0.45) : bg }}
                   title={`Day ${day}`}

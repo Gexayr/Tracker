@@ -63,6 +63,10 @@ services:
       - "${FRONTEND_HOST_PORT:-8181}:3000"
     environment:
       NODE_ENV: development
+      # Point the React app to the backend API
+      REACT_APP_API_URL: http://localhost:${BACKEND_HOST_PORT:-3002}
+      # Google OAuth client id for Google Identity Services (frontend)
+      REACT_APP_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
 
 volumes:
   db_data:
