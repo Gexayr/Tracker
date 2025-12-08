@@ -5,6 +5,7 @@ import { UsersModule } from './users/users.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { StorageModule } from './storage/storage.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -17,10 +18,13 @@ import { StorageModule } from './storage/storage.module';
       password: process.env.DB_PASSWORD || 'postgres',
       database: process.env.DB_NAME || 'tracker',
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
-      synchronize: true, // Don't use in production
+      synchronize: false, // use migrations instead
+      migrations: [__dirname + '/migrations/*{.ts,.js}'],
+      migrationsRun: true,
     }),
     UsersModule,
     StorageModule,
+    AuthModule,
   ],
 })
 export class AppModule {}

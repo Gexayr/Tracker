@@ -1,0 +1,9 @@
+ARG BASE_IMAGE=node:20-alpine
+FROM ${BASE_IMAGE}
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+# The dev server runs on port 3000 (npm start)
+EXPOSE 3000
+CMD ["npm", "start"]

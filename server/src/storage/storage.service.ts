@@ -11,19 +11,20 @@ export class StorageService {
     private repo: Repository<Storage>,
   ) {}
 
-  async get(year: number, month: number): Promise<Storage | null> {
-    return this.repo.findOne({ where: { year, month } });
+  async getForUser(userId: number, year: number, month: number): Promise<Storage | null> {
+    return this.repo.findOne({ where: { userId, year, month } });
   }
 
-  async upsert(dto: UpsertStorageDto): Promise<Storage> {
-    const existing = await this.get(dto.year, dto.month);
+  async upsertForUser(userId: number, dto: UpsertStorageDto): Promise<Storage> {
+    const existing = await this.getForUser(userId, dto.year, dto.month);
     if (existing) {
       existing.payload = dto.payload;
+      existing.userId = userId;
       // Save a single entity
       return await this.repo.save(existing);
     }
     // Create a single entity explicitly (not an array)
-    const created = this.repo.create(dto as DeepPartial<Storage>);
+    const created = this.repo.create({ ...(dto as DeepPartial<Storage>), userId });
     return await this.repo.save(created);
   }
 }

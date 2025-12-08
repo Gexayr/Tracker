@@ -1,10 +1,18 @@
-import { Entity, Column, PrimaryGeneratedColumn, Index } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, Index, ManyToOne, JoinColumn } from 'typeorm';
+import { User } from '../users/users.entity';
 
 @Entity()
-@Index(['year', 'month'], { unique: true })
+@Index(['userId', 'year', 'month'], { unique: true })
 export class Storage {
   @PrimaryGeneratedColumn()
   id: number;
+
+  @Column()
+  userId: number;
+
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'userId' })
+  user: User;
 
   @Column()
   year: number;

@@ -1,9 +1,20 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
-import { Line } from 'react-chartjs-2';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, RadialLinearScale, Filler, BarElement } from 'chart.js';
+import { Line, Radar, Bar } from 'react-chartjs-2';
 
 // Chart.js registration
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  RadialLinearScale,
+  Filler,
+  BarElement,
+);
 
 // ---------- Configuration / Defaults ----------
 const DEFAULT_HABITS = [
@@ -38,6 +49,7 @@ export default function App() {
   const [month, setMonth] = useState(today.getMonth());
   const [habits, setHabits] = useState([]);
   const [data, setData] = useState({});
+  const [chartType, setChartType] = useState('line'); // 'line' | 'bar' | 'radar'
   const [showHelp, setShowHelp] = useState(false);
 
   // Initialize month data
@@ -46,8 +58,9 @@ export default function App() {
     DEFAULT_HABITS.forEach(h => (initData[h.id] = {}));
     setHabits(DEFAULT_HABITS);
     setData(initData);
+    setChartType('line');
     // Try to persist to server but don't block UI
-    apiPut(year, month, { habits: DEFAULT_HABITS, data: initData }).catch(() => {});
+    apiPut(year, month, { habits: DEFAULT_HABITS, data: initData, chartType: 'line' }).catch(() => {});
   }, [year, month]);
 
   // Load from server on mount / when year/month changes
@@ -60,6 +73,7 @@ export default function App() {
         if (payload && !cancelled) {
           setHabits(payload.habits || DEFAULT_HABITS);
           setData(payload.data || {});
+          if (payload.chartType) setChartType(payload.chartType);
           return;
         }
         if (!cancelled) initDefaultMonth();
@@ -73,10 +87,10 @@ export default function App() {
 
   // Persist changes to server
   useEffect(() => {
-    apiPut(year, month, { habits, data }).catch(() => {
+    apiPut(year, month, { habits, data, chartType }).catch(() => {
       // No-op on failure; UI remains responsive
     });
-  }, [habits, data, year, month]);
+  }, [habits, data, chartType, year, month]);
 
   const toggleDay = (habitId, day) => {
     setData(prev => {
@@ -152,7 +166,7 @@ export default function App() {
                 <p><strong>How it works:</strong></p>
                 <ul>
                   <li>Click on a day cell to toggle completion for that habit.</li>
-                  <li>Data is saved locally per month. Switch months with ◀ ▶.</li>
+                  <li>Data is saved to your account on the server per month. Switch months with ◀ ▶.</li>
                   <li>Add or remove habits. Progress and chart update automatically.</li>
                 </ul>
               </div>
@@ -172,10 +186,17 @@ export default function App() {
             </div>
 
             <div className="panel chart-wrap">
-              <ProgressChart month={month} year={year} habits={habits} data={data} />
-            </div>
+              <ProgressChart
+                month={month}
+                year={year}
+                habits={habits}
+                data={data}
+                chartType={chartType}
+                onChangeChartType={setChartType}
+              />
           </div>
-        </section>
+        </div>
+      </section>
       </main>
 
       <footer>
@@ -294,7 +315,7 @@ function ProgressSummary({ month, year, habits, data }) {
   );
 }
 
-function ProgressChart({ month, year, habits, data }) {
+function ProgressChart({ month, year, habits, data, chartType, onChangeChartType }) {
   const days = new Date(year, month+1, 0).getDate();
   const labels = Array.from({ length: days }).map((_,i)=>i+1);
   const dailyPercent = labels.map(day => {
@@ -303,27 +324,69 @@ function ProgressChart({ month, year, habits, data }) {
     return habits.length ? Math.round(done/habits.length*100) : 0;
   });
 
-  const chartData = {
+  // For radar, compute per-habit percent across the month
+  const habitPercents = habits.map(h => calculateHabitProgress(h.id, data, month, year));
+  const habitLabels = habits.map(h => h.name);
+
+  const lineOrBarData = {
     labels,
     datasets: [{
       label: 'Daily completion % (all habits)',
       data: dailyPercent,
-      fill:false,
-      tension:0.3,
-      borderWidth:2
+      fill: chartType === 'line' ? false : true,
+      tension: 0.3,
+      borderWidth: 2,
+      backgroundColor: 'rgba(33, 158, 188, 0.25)',
+      borderColor: '#219ebc',
     }]
   };
 
-  const options = {
-    responsive:true,
-    plugins:{ legend:{ position:'top' } },
-    scales:{ y:{ beginAtZero:true, max:100 } }
+  const radarData = {
+    labels: habitLabels,
+    datasets: [{
+      label: 'Monthly completion by habit (%)',
+      data: habitPercents,
+      backgroundColor: 'rgba(6, 214, 160, 0.25)',
+      borderColor: '#06d6a0',
+      pointBackgroundColor: '#06d6a0',
+      borderWidth: 2,
+    }]
+  };
+
+  const commonOptions = {
+    responsive: true,
+    plugins: { legend: { position: 'top' } },
+  };
+
+  const lineOptions = {
+    ...commonOptions,
+    scales: { y: { beginAtZero: true, max: 100 } }
+  };
+
+  const barOptions = lineOptions;
+
+  const radarOptions = {
+    ...commonOptions,
+    scales: { r: { beginAtZero: true, max: 100 } }
   };
 
   return (
     <div>
-      <h4>Month Chart</h4>
-      <Line data={chartData} options={options} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h4 style={{ margin: 0 }}>Progress Chart</h4>
+        <div>
+          <label style={{ marginRight: 8 }}>Chart type:</label>
+          <select value={chartType} onChange={e => onChangeChartType(e.target.value)}>
+            <option value="line">Line</option>
+            <option value="bar">Bar</option>
+            <option value="radar">Radar (Spider)</option>
+          </select>
+        </div>
+      </div>
+
+      {chartType === 'line' && <Line data={lineOrBarData} options={lineOptions} />}
+      {chartType === 'bar' && <Bar data={lineOrBarData} options={barOptions} />}
+      {chartType === 'radar' && <Radar data={radarData} options={radarOptions} />}
     </div>
   );
 }

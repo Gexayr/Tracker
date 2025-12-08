@@ -1,4 +1,5 @@
-FROM node:20-alpine AS build
+ARG BASE_IMAGE=node:20-alpine
+FROM ${BASE_IMAGE} AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
