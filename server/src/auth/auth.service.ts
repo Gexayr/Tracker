@@ -67,7 +67,7 @@ export class AuthService {
   }
 
   async googleLogin(idToken: string) {
-    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientId = process.env.GOOGLE_CLIENT_ID || '';
     if (!clientId) {
       throw new Error('GOOGLE_CLIENT_ID is not configured');
     }

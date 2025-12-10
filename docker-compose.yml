@@ -39,6 +39,11 @@ services:
       PORT: 3001
       JWT_SECRET: ${JWT_SECRET:-change_this_in_prod}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-http://localhost:3002/auth/google/callback}
+      # Optional: if set, backend will redirect from /auth/google/callback to this URL
+      # with access_token placed in the URL fragment (hash)
+      FRONTEND_REDIRECT_URL: ${FRONTEND_REDIRECT_URL:-}
       CORS_ORIGIN: http://localhost:3000,http://localhost:8181,http://localhost:80,http://tracking.amsoft.am,https://tracking.amsoft.am
     depends_on:
       db:
