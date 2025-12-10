@@ -3,13 +3,41 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';
 import { UsersService } from '../users/users.service';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly storageService: StorageService,
   ) {}
+
+  private async getCurrentStorage(userId: number) {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const record = await this.storageService.getForUser(userId, year, month);
+
+    if (!record || Object.keys(record?.payload?.data).length === 0 || Object.keys(record?.payload?.habits).length === 0) {
+      // Auto-create default info for new/empty users
+      const defaultHabits = [
+        { id: 1, name: 'Meditation', color: '#8ecae6' },
+        { id: 2, name: 'Workout', color: '#219ebc' },
+        { id: 3, name: 'Read 30 min', color: '#ffd166' },
+        { id: 4, name: 'No sugar', color: '#06d6a0' },
+      ];
+      const initData: Record<number, Record<number, boolean>> = {} as any;
+      defaultHabits.forEach(h => (initData[h.id] = {}));
+      const created = await this.storageService.upsertForUser(userId, {
+        year,
+        month,
+        payload: { habits: defaultHabits, data: initData, chartType: 'line' },
+      } as any);
+      return { id: created.id, year: created.year, month: created.month, payload: created.payload };
+    }
+    return { id: record.id, year: record.year, month: record.month, payload: record.payload };
+  }
 
   async register(input: { email: string; password: string; name?: string | null }) {
     const user = await this.usersService.create({
@@ -18,7 +46,8 @@ export class AuthService {
       name: input.name ?? null,
     });
     const token = await this.signToken(user.id, user.email);
-    return { user, access_token: token };
+    const storage = await this.getCurrentStorage(user.id);
+    return { user, access_token: token, storage };
   }
 
   async login(email: string, password: string) {
@@ -28,7 +57,8 @@ export class AuthService {
     if (!ok) throw new UnauthorizedException('Invalid credentials');
     const { passwordHash: _, ...safe } = user as any;
     const token = await this.signToken(user.id, user.email);
-    return { user: safe, access_token: token };
+    const storage = await this.getCurrentStorage(user.id);
+    return { user: safe, access_token: token, storage };
   }
 
   async signToken(sub: number, email: string) {
@@ -51,6 +81,7 @@ export class AuthService {
     const name = payload.name ?? null;
     const user = await this.usersService.upsertOAuthUser(email, name);
     const token = await this.signToken(user.id, user.email);
-    return { user, access_token: token };
+    const storage = await this.getCurrentStorage(user.id);
+    return { user, access_token: token, storage };
   }
 }

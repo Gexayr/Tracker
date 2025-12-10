@@ -8,5 +8,6 @@ import { StorageController } from './storage.controller';
   imports: [TypeOrmModule.forFeature([Storage])],
   controllers: [StorageController],
   providers: [StorageService],
+  exports: [StorageService],
 })
 export class StorageModule {}
