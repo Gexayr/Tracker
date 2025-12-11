@@ -53,7 +53,13 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     const year = now.getFullYear();
     const month = now.getMonth();
     const record = await this.storageService.getForUser(userId, year, month);
-    if (!record || Object.keys(record?.payload?.data || {}).length === 0 || Object.keys(record?.payload?.habits || {}).length === 0) {
+    // Initialize only if there's no record or payload is missing core fields.
+    // Do not treat empty objects/arrays as a reason to overwrite existing user data.
+    const noPayload = record?.payload == null || typeof record?.payload !== 'object';
+    const payloadMissingCore = !noPayload && (
+      typeof record?.payload?.habits === 'undefined' || typeof record?.payload?.data === 'undefined'
+    );
+    if (!record || noPayload || payloadMissingCore) {
       const defaultHabits = [
         { id: 1, name: 'Meditation', color: '#8ecae6' },
         { id: 2, name: 'Workout', color: '#219ebc' },

@@ -19,7 +19,13 @@ export class AuthService {
     const month = now.getMonth();
     const record = await this.storageService.getForUser(userId, year, month);
 
-    if (!record || Object.keys(record?.payload?.data).length === 0 || Object.keys(record?.payload?.habits).length === 0) {
+    // Initialize only when there is no record or payload is missing.
+    // Do NOT overwrite when payload exists but is an empty object/array — that might be a legitimate saved state.
+    const noPayload = record?.payload == null || typeof record?.payload !== 'object';
+    const payloadMissingCore = !noPayload && (
+      typeof record?.payload?.habits === 'undefined' || typeof record?.payload?.data === 'undefined'
+    );
+    if (!record || noPayload || payloadMissingCore) {
       // Auto-create default info for new/empty users
       const defaultHabits = [
         { id: 1, name: 'Meditation', color: '#8ecae6' },
