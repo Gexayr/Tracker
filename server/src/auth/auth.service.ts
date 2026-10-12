@@ -1,5 +1,6 @@
 import {
   Injectable,
+  NotFoundException,
   Logger,
   ServiceUnavailableException,
   UnauthorizedException,
@@ -55,6 +56,28 @@ export class AuthService {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw new UnauthorizedException('Invalid credentials');
     return this.buildAuthResponse(toSafeUser(user));
+  }
+
+  async getProfile(userId: number, email: string) {
+    const user = await this.usersService.findById(userId);
+    // Keep the old shape working even if the row is somehow gone.
+    if (!user) return { userId, email, name: null, locale: null };
+    return {
+      userId: user.id,
+      email: user.email,
+      name: user.name ?? null,
+      locale: user.locale ?? null,
+    };
+  }
+
+  async updateProfile(
+    userId: number,
+    email: string,
+    patch: { locale?: string },
+  ) {
+    const updated = await this.usersService.updatePreferences(userId, patch);
+    if (!updated) throw new NotFoundException('User not found');
+    return this.getProfile(userId, email);
   }
 
   async signToken(sub: number, email: string) {

@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { FiCheck } from 'react-icons/fi';
-import { t } from '../i18n';
+import { FiCheck, FiMenu } from 'react-icons/fi';
+import { useReorder } from '../hooks/useReorder';
+import { formatPercent, t } from '../i18n';
 import { habitColor, textOn } from '../utils/color';
 import {
   daysInMonth,
@@ -12,8 +13,9 @@ import {
   monthRelation,
   weekdayInitial,
 } from '../utils/date';
+import { isScheduled } from '../utils/progress';
 
-export function HabitGrid({ year, month, habits, data, stats, now, theme, onToggle, onEdit }) {
+export function HabitGrid({ year, month, habits, data, stats, now, theme, onToggle, onEdit, onMove, onAnnounce }) {
   const total = daysInMonth(year, month);
   const elapsed = elapsedDays(year, month, now); // last toggleable day
   const rel = monthRelation(year, month, now);
@@ -23,6 +25,12 @@ export function HabitGrid({ year, month, habits, data, stats, now, theme, onTogg
   const scrollRef = useRef(null);
   const tableRef = useRef(null);
   const [focus, setFocus] = useState({ r: 0, c: Math.max(1, elapsed) });
+  const reorder = useReorder({
+    ids: habits.map((h) => h.id),
+    onMove,
+    onAnnounce,
+    getScroller: () => scrollRef.current,
+  });
 
   useEffect(() => {
     setFocus({ r: 0, c: Math.max(1, elapsedDays(year, month, new Date())) });
@@ -117,9 +125,18 @@ export function HabitGrid({ year, month, habits, data, stats, now, theme, onTogg
             const fg = textOn(bg);
             const s = stats[h.id];
             const entries = data[h.id] || {};
+            const drag = reorder.itemProps(h.id);
             return (
-              <tr key={h.id}>
+              <tr key={h.id} ref={reorder.itemRef(h.id)} className={drag.className} style={drag.style}>
                 <th scope="row" className="habit-cell">
+                  <div className="habit-cell-inner">
+                  <button
+                    type="button"
+                    className="drag-handle"
+                    {...reorder.handleProps(h.id, t.dragHandle(h.name))}
+                  >
+                    <FiMenu aria-hidden="true" />
+                  </button>
                   <button
                     type="button"
                     className="habit-name-btn"
@@ -130,10 +147,13 @@ export function HabitGrid({ year, month, habits, data, stats, now, theme, onTogg
                     <span className="dot" style={{ background: bg }} aria-hidden="true" />
                     <span className="habit-name-text">{h.name}</span>
                   </button>
+                  </div>
                 </th>
                 {days.map((d) => {
                   const done = !!entries[d];
                   const future = d > elapsed;
+                  const off = !isScheduled(h, year, month, d);
+                  const locked = off && !done; // rest day: nothing to mark
                   const cls = [
                     'day-cell',
                     isWeekend(year, month, d) && 'is-weekend',
@@ -142,20 +162,31 @@ export function HabitGrid({ year, month, habits, data, stats, now, theme, onTogg
                   ]
                     .filter(Boolean)
                     .join(' ');
-                  const state = future ? t.future : done ? t.done : t.notDone;
+                  const state = future
+                    ? t.future
+                    : off
+                    ? done
+                      ? `${t.offDay}, ${t.done}`
+                      : t.offDay
+                    : done
+                    ? t.done
+                    : t.notDone;
                   return (
                     <td key={d} className={cls}>
                       <button
                         type="button"
-                        className={`cell${done ? ' done' : ''}`}
+                        className={`cell${done ? ' done' : ''}${off ? ' off' : ''}`}
                         style={{ '--c': bg, '--on-c': fg }}
-                        aria-pressed={done}
+                        aria-pressed={locked ? undefined : done}
+                        aria-disabled={locked || undefined}
                         aria-label={t.cellLabel(h.name, formatDayMonth(year, month, d), state)}
                         disabled={future}
                         tabIndex={fr === r && fc === d ? 0 : -1}
                         data-r={r}
                         data-c={d}
-                        onClick={() => onToggle(h.id, d)}
+                        onClick={() => {
+                          if (!locked) onToggle(h.id, d);
+                        }}
                         onFocus={() => setFocus({ r, c: d })}
                       >
                         {done ? <FiCheck aria-hidden="true" /> : null}
@@ -164,7 +195,7 @@ export function HabitGrid({ year, month, habits, data, stats, now, theme, onTogg
                   );
                 })}
                 <td className="pct-cell">
-                  <span className="pct-value">{s?.percent === null || !s ? t.dash : `${s.percent}%`}</span>
+                  <span className="pct-value">{s?.percent === null || !s ? t.dash : formatPercent(s.percent)}</span>
                 </td>
               </tr>
             );

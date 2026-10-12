@@ -22,6 +22,10 @@ export class User {
   @Column({ type: 'varchar', length: 255, nullable: true })
   name?: string | null;
 
+  /** Preferred UI language ('en' | 'ru'); null = client decides. */
+  @Column({ type: 'varchar', length: 8, nullable: true })
+  locale?: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

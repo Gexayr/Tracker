@@ -11,7 +11,7 @@ import {
   Tooltip,
 } from 'chart.js';
 import { Bar, Line, Radar } from 'react-chartjs-2';
-import { t } from '../i18n';
+import { formatPercent, getLang, t } from '../i18n';
 import { CHART_THEME, withAlpha } from '../utils/color';
 import { daysInMonth, formatDayMonth } from '../utils/date';
 import { dailyCompletion } from '../utils/progress';
@@ -29,15 +29,13 @@ ChartJS.register(
 ChartJS.defaults.font.family =
   'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
-const TYPES = [
-  ['line', t.chartLine],
-  ['bar', t.chartBar],
-  ['radar', t.chartRadar],
-];
+const TYPES = ['line', 'bar', 'radar'];
+const typeLabel = (k) => ({ line: t.chartLine, bar: t.chartBar, radar: t.chartRadar }[k]);
 
 export function ProgressChart({ year, month, habits, data, stats, now, theme, chartType, onChangeChartType, compact }) {
+  const lang = getLang(); // remount charts on language change (tick formatters)
   const c = CHART_THEME[theme] || CHART_THEME.light;
-  const type = TYPES.some(([k]) => k === chartType) ? chartType : 'line';
+  const type = TYPES.includes(chartType) ? chartType : 'line';
 
   const daily = useMemo(() => dailyCompletion(habits, data, year, month, now), [habits, data, year, month, now]);
   const total = daysInMonth(year, month);
@@ -85,7 +83,7 @@ export function ProgressChart({ year, month, habits, data, stats, now, theme, ch
           max: 100,
           grid: { color: c.grid },
           border: { display: false },
-          ticks: { color: c.textMuted, stepSize: 25, callback: (v) => `${v}%` },
+          ticks: { color: c.textMuted, stepSize: 25, callback: (v) => formatPercent(v) },
         },
       },
     }),
@@ -99,7 +97,7 @@ export function ProgressChart({ year, month, habits, data, stats, now, theme, ch
       animation: { duration: 300 },
       plugins: {
         legend: { display: false },
-        tooltip: { ...tooltip, callbacks: { label: (item) => `${item.raw}%` } },
+        tooltip: { ...tooltip, callbacks: { label: (item) => formatPercent(item.raw) } },
       },
       scales: {
         r: {
@@ -182,7 +180,7 @@ export function ProgressChart({ year, month, habits, data, stats, now, theme, ch
           <p className="card-subtitle">{type === 'radar' ? t.chartSubtitleRadar : t.chartSubtitleDaily}</p>
         </div>
         <div className="segmented segmented-sm" role="group" aria-label={t.chartType}>
-          {TYPES.map(([k, label]) => (
+          {TYPES.map((k) => (
             <button
               key={k}
               type="button"
@@ -190,7 +188,7 @@ export function ProgressChart({ year, month, habits, data, stats, now, theme, ch
               aria-pressed={type === k}
               onClick={() => onChangeChartType(k)}
             >
-              {label}
+              {typeLabel(k)}
             </button>
           ))}
         </div>
@@ -199,11 +197,11 @@ export function ProgressChart({ year, month, habits, data, stats, now, theme, ch
         {!hasData ? (
           <p className="muted chart-empty">{t.chartEmpty}</p>
         ) : type === 'radar' ? (
-          <Radar key={`r-${theme}`} data={radarData} options={radarOptions} aria-label={t.chartSubtitleRadar} role="img" />
+          <Radar key={`r-${theme}-${lang}`} data={radarData} options={radarOptions} aria-label={t.chartSubtitleRadar} role="img" />
         ) : type === 'bar' ? (
-          <Bar key={`b-${theme}`} data={barData} options={dailyOptions} aria-label={t.chartSubtitleDaily} role="img" />
+          <Bar key={`b-${theme}-${lang}`} data={barData} options={dailyOptions} aria-label={t.chartSubtitleDaily} role="img" />
         ) : (
-          <Line key={`l-${theme}`} data={lineData} options={dailyOptions} aria-label={t.chartSubtitleDaily} role="img" />
+          <Line key={`l-${theme}-${lang}`} data={lineData} options={dailyOptions} aria-label={t.chartSubtitleDaily} role="img" />
         )}
       </div>
     </div>

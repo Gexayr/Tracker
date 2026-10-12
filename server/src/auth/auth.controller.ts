@@ -3,6 +3,7 @@ import {
   Post,
   Body,
   Get,
+  Patch,
   UseGuards,
   Req,
   Res,
@@ -14,16 +15,21 @@ import type { Response } from 'express';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { GoogleLoginDto } from './dto/google-login.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { Throttle } from '@nestjs/throttler';
+import { AUTH_THROTTLE } from '../throttle.constants';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Throttle(AUTH_THROTTLE)
   @Post('register')
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }
 
+  @Throttle(AUTH_THROTTLE)
   @Post('login')
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto.email, dto.password);
@@ -32,9 +38,19 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('profile')
   profile(@Req() req: { user: { sub: number; email: string } }) {
-    return { userId: req.user.sub, email: req.user.email };
+    return this.authService.getProfile(req.user.sub, req.user.email);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Patch('profile')
+  updateProfile(
+    @Req() req: { user: { sub: number; email: string } },
+    @Body() dto: UpdateProfileDto,
+  ) {
+    return this.authService.updateProfile(req.user.sub, req.user.email, dto);
+  }
+
+  @Throttle(AUTH_THROTTLE)
   @Post('google')
   google(@Body() body: GoogleLoginDto) {
     return this.authService.googleLogin(body.idToken);

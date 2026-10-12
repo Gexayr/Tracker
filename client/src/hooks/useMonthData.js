@@ -1,11 +1,36 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiGetMonth, apiPutMonth } from '../api';
+import { t } from '../i18n';
 import { DEFAULT_HABITS, nextHabitColor } from '../utils/color';
 import { monthKey } from '../utils/date';
+import { normalizeDays, normalizeTarget } from '../utils/progress';
 
 const SAVE_DEBOUNCE_MS = 500;
 const CHART_TYPES = ['line', 'bar', 'radar'];
 export const MAX_HABIT_NAME = 100;
+export const MAX_HABITS = 50;
+const REMINDER_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/**
+ * Keeps only the fields the server accepts, in their valid form. Defaults are
+ * omitted: no `days` = every day, no `target` = % of scheduled days.
+ */
+export function cleanHabit(h) {
+  const out = { id: h.id, name: h.name };
+  if (h.color !== undefined) out.color = h.color;
+  const days = normalizeDays(h.days);
+  if (days) out.days = days;
+  const target = normalizeTarget(h.target);
+  if (target !== null) out.target = target;
+  if (typeof h.reminder === 'string' && REMINDER_RE.test(h.reminder)) out.reminder = h.reminder;
+  if (h.archived === true) out.archived = true;
+  return out;
+}
+
+function defaultHabits() {
+  const names = Array.isArray(t.defaultHabits) ? t.defaultHabits : [];
+  return DEFAULT_HABITS.map((h, i) => ({ ...h, name: names[i] || h.name }));
+}
 
 const EMPTY = { key: null, status: 'idle', habits: [], data: {}, chartType: 'line', error: null };
 
@@ -13,7 +38,7 @@ function sanitizePayload(payload) {
   const habits = Array.isArray(payload.habits)
     ? payload.habits
         .filter((h) => h && h.id !== undefined && h.id !== null && typeof h.name === 'string')
-        .map((h) => ({ id: h.id, name: h.name, color: h.color }))
+        .map(cleanHabit)
     : [];
   const data = payload.data && typeof payload.data === 'object' ? payload.data : {};
   const chartType = CHART_TYPES.includes(payload.chartType) ? payload.chartType : 'line';
@@ -154,7 +179,7 @@ export function useMonthData({ token, year, month, onUnauthorized }) {
         // No data for this month yet: start from the previously viewed month's
         // habits (without completions) or the defaults, and save that.
         const seed = seedRef.current;
-        const habits = (seed && seed.habits.length ? seed.habits : DEFAULT_HABITS).map((h) => ({ ...h }));
+        const habits = (seed && seed.habits.length ? seed.habits : defaultHabits()).map((h) => ({ ...h }));
         const next = {
           key,
           status: 'ready',
@@ -221,22 +246,42 @@ export function useMonthData({ token, year, month, onUnauthorized }) {
     [update]
   );
 
+  /** extra: { color?, days?, target?, reminder? } */
   const addHabit = useCallback(
-    (name, color) =>
+    (name, extra = {}) =>
       update((s) => {
+        if (s.habits.length >= MAX_HABITS) return null;
         const ids = s.habits.map((h) => (typeof h.id === 'number' ? h.id + 1 : 0));
         const id = Math.max(Date.now(), ...ids);
-        const habit = { id, name, color: color || nextHabitColor(s.habits) };
+        const habit = cleanHabit({ ...extra, id, name, color: extra.color || nextHabitColor(s.habits) });
         return { habits: [...s.habits, habit], data: { ...s.data, [id]: {} } };
       }),
     [update]
   );
 
+  /** `changes` may set a field to null/undefined to reset it to the default. */
   const editHabit = useCallback(
     (id, changes) =>
       update((s) => ({
-        habits: s.habits.map((h) => (h.id === id ? { ...h, ...changes } : h)),
+        habits: s.habits.map((h) => (h.id === id ? cleanHabit({ ...h, ...changes }) : h)),
       })),
+    [update]
+  );
+
+  /** Moves a habit to `toIndex` among the non-archived habits (display order). */
+  const moveHabit = useCallback(
+    (id, toIndex) =>
+      update((s) => {
+        const active = s.habits.filter((h) => !h.archived);
+        const from = active.findIndex((h) => h.id === id);
+        const to = Math.max(0, Math.min(active.length - 1, toIndex));
+        if (from < 0 || from === to) return null;
+        const moved = [...active];
+        const [item] = moved.splice(from, 1);
+        moved.splice(to, 0, item);
+        let i = 0;
+        return { habits: s.habits.map((h) => (h.archived ? h : moved[i++])) };
+      }),
     [update]
   );
 
@@ -283,6 +328,7 @@ export function useMonthData({ token, year, month, onUnauthorized }) {
     toggleDay,
     addHabit,
     editHabit,
+    moveHabit,
     removeHabit,
     restoreHabit,
     setChartType,

@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { FiCheckSquare, FiChevronLeft, FiChevronRight, FiLogOut } from 'react-icons/fi';
+import { FiCheckSquare, FiChevronLeft, FiChevronRight, FiDownload, FiLogOut } from 'react-icons/fi';
 import { t } from '../i18n';
 import { formatMonthYear } from '../utils/date';
+import { LanguageSwitch } from './LanguageSwitch';
 import { SaveStatus } from './SaveStatus';
 import { ThemeToggle } from './ThemeToggle';
 
-function UserMenu({ email, onLogout }) {
+function UserMenu({ email, onLogout, lang, onLang, onExport, exporting, year, month }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -44,6 +45,34 @@ function UserMenu({ email, onLogout }) {
             <span className="muted small">{t.signedInAs}</span>
             <span className="menu-email">{email || '—'}</span>
           </div>
+          <div className="menu-section">
+            <span className="menu-label" id="menu-lang-label">
+              {t.language}
+            </span>
+            <LanguageSwitch lang={lang} onChange={onLang} />
+          </div>
+          <div className="menu-sep" role="separator" />
+          <span className="menu-label">{t.exportSection}</span>
+          {[
+            ['month', t.exportMonth(formatMonthYear(year, month))],
+            ['year', t.exportYear(year)],
+            ['summary', t.exportSummary(year)],
+          ].map(([kind, label]) => (
+            <button
+              key={kind}
+              type="button"
+              role="menuitem"
+              className="menu-item"
+              disabled={!!exporting}
+              onClick={() => {
+                onExport(kind);
+                setOpen(false);
+              }}
+            >
+              <FiDownload aria-hidden="true" /> {label}
+            </button>
+          ))}
+          <div className="menu-sep" role="separator" />
           <button type="button" role="menuitem" className="menu-item" onClick={onLogout}>
             <FiLogOut aria-hidden="true" /> {t.logout}
           </button>
@@ -66,6 +95,11 @@ export function Header({
   onCycleTheme,
   email,
   onLogout,
+  lang,
+  onLang,
+  onExport,
+  exporting,
+  hideMonthNav,
 }) {
   return (
     <header className="app-header">
@@ -76,7 +110,7 @@ export function Header({
         <span className="brand-name">{t.appName}</span>
       </div>
 
-      <nav className="month-nav" aria-label={t.monthNav}>
+      <nav className={`month-nav${hideMonthNav ? ' is-hidden' : ''}`} aria-label={t.monthNav} hidden={hideMonthNav}>
         <button type="button" className="icon-btn" onClick={onPrev} aria-label={t.prevMonth}>
           <FiChevronLeft aria-hidden="true" />
         </button>
@@ -100,7 +134,16 @@ export function Header({
       <div className="header-actions">
         <SaveStatus status={saveStatus} onRetry={onRetrySave} />
         <ThemeToggle preference={themePreference} onCycle={onCycleTheme} />
-        <UserMenu email={email} onLogout={onLogout} />
+        <UserMenu
+          email={email}
+          onLogout={onLogout}
+          lang={lang}
+          onLang={onLang}
+          onExport={onExport}
+          exporting={exporting}
+          year={year}
+          month={month}
+        />
       </div>
     </header>
   );

@@ -45,7 +45,8 @@ async function request(path, { method = 'GET', token, body, signal, keepalive, f
     } catch (_) {
       raw = undefined;
     }
-    const messages = normalizeMessages(raw, fallback || `Request failed (${res.status})`);
+    const fb = res.status === 429 ? t.rateLimited : fallback || `Request failed (${res.status})`;
+    const messages = normalizeMessages(raw, fb);
     throw new ApiError(messages.join(' '), res.status, messages);
   }
   if (res.status === 204) return null;
@@ -70,6 +71,13 @@ export const apiGoogle = (idToken) =>
   request('/auth/google', { method: 'POST', body: { idToken }, fallback: t.googleFailed });
 
 export const apiProfile = (token, signal) => request('/auth/profile', { token, signal });
+
+export const apiUpdateProfile = (token, changes) =>
+  request('/auth/profile', { method: 'PATCH', token, body: changes });
+
+/** [{ year, month, payload }] for the months of `year` that exist. */
+export const apiGetYear = (year, token, signal) =>
+  request(`/storage/year/${year}`, { token, signal, fallback: t.yearLoadFailed });
 
 export const apiGetMonth = (year, month, token, signal) =>
   request(`/storage/${year}/${month}`, { token, signal, fallback: t.loadFailed });

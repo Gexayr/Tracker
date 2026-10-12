@@ -23,6 +23,13 @@
         var root = document.documentElement;
         root.setAttribute('data-theme', theme);
         root.style.colorScheme = theme;
+        // Language (mirrors detectLang in src/i18n.js) so <html lang> is right from the start.
+        var lang = '';
+        try {
+          lang = localStorage.getItem('lang') || localStorage.getItem('lang_profile') || '';
+        } catch (e) {}
+        if (!lang) lang = (navigator.language || '').toLowerCase();
+        root.setAttribute('lang', lang.indexOf('ru') === 0 ? 'ru' : 'en');
       })();
     </script>
   </head>

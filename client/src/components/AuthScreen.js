@@ -1,8 +1,23 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { FiEye, FiEyeOff, FiCheckSquare } from 'react-icons/fi';
+import {
+  FiAlertCircle,
+  FiCheck,
+  FiCheckSquare,
+  FiChrome,
+  FiClock,
+  FiCopy,
+  FiEye,
+  FiEyeOff,
+  FiX,
+} from 'react-icons/fi';
 import { apiGoogle, apiLogin, apiRegister, GOOGLE_CLIENT_ID } from '../api';
 import { t } from '../i18n';
+import { copyText } from '../utils/clipboard';
+import { chromeIntentUrl, currentBrowser } from '../utils/inAppBrowser';
+import { LanguageSwitch } from './LanguageSwitch';
 import { ThemeToggle } from './ThemeToggle';
+
+const GIS_TIMEOUT_MS = 8000;
 
 function toMessages(err, fallback) {
   if (Array.isArray(err?.messages) && err.messages.length) return err.messages;
@@ -155,12 +170,13 @@ function loadGis() {
   });
 }
 
-function GoogleSignIn({ theme, onToken }) {
+function GoogleSignIn({ theme, onToken, lang }) {
   const ref = useRef(null);
   const [ready, setReady] = useState(
     () => !!window.google?.accounts?.id && gisInitializedFor === GOOGLE_CLIENT_ID
   );
   const [width, setWidth] = useState(320);
+  const [failed, setFailed] = useState(false);
 
   // Always call the latest callback without re-initializing GIS.
   useLayoutEffect(() => {
@@ -170,9 +186,14 @@ function GoogleSignIn({ theme, onToken }) {
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID) return undefined;
     let cancelled = false;
+    let ok = false;
+    const timer = setTimeout(() => {
+      if (!cancelled && !ok) setFailed(true);
+    }, GIS_TIMEOUT_MS);
     loadGis()
       .then(() => {
         if (cancelled) return;
+        if (!window.google?.accounts?.id) throw new Error('GIS missing');
         if (gisInitializedFor !== GOOGLE_CLIENT_ID) {
           window.google.accounts.id.initialize({
             client_id: GOOGLE_CLIENT_ID,
@@ -182,11 +203,17 @@ function GoogleSignIn({ theme, onToken }) {
           });
           gisInitializedFor = GOOGLE_CLIENT_ID;
         }
+        ok = true;
+        clearTimeout(timer);
+        setFailed(false);
         setReady(true);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, []);
 
@@ -208,25 +235,147 @@ function GoogleSignIn({ theme, onToken }) {
   useEffect(() => {
     if (!ready || !ref.current || !window.google?.accounts?.id) return;
     ref.current.innerHTML = '';
-    window.google.accounts.id.renderButton(ref.current, {
-      theme: theme === 'dark' ? 'filled_black' : 'outline',
-      size: 'large',
-      shape: 'pill',
-      text: 'continue_with',
-      width,
-    });
-  }, [ready, theme, width]);
+    try {
+      window.google.accounts.id.renderButton(ref.current, {
+        theme: theme === 'dark' ? 'filled_black' : 'outline',
+        size: 'large',
+        shape: 'pill',
+        text: 'continue_with',
+        width,
+        locale: lang,
+      });
+    } catch (_) {
+      setFailed(true);
+    }
+  }, [ready, theme, width, lang]);
 
   return (
     <div className="google-wrap">
-      <div ref={ref} className="google-btn" />
+      {failed && !ready ? (
+        <p className="field-hint center google-fallback" role="status">
+          <FiAlertCircle aria-hidden="true" /> {t.googleUnavailable}
+        </p>
+      ) : (
+        <div ref={ref} className="google-btn" />
+      )}
     </div>
   );
 }
 
-export function AuthScreen({ theme, themePreference, onCycleTheme, onSession, notice }) {
+function CopyLinkButton() {
+  const [state, setState] = useState('idle'); // idle | copied | failed
+  const href = window.location.href.split('#')[0];
+  return (
+    <>
+      <button
+        type="button"
+        className="btn btn-ghost"
+        onClick={async () => setState((await copyText(href)) ? 'copied' : 'failed')}
+      >
+        {state === 'copied' ? <FiCheck aria-hidden="true" /> : <FiCopy aria-hidden="true" />}{' '}
+        {state === 'copied' ? t.linkCopied : t.copyLink}
+      </button>
+      {state === 'failed' ? (
+        <div className="copy-fallback">
+          <label className="field-hint" htmlFor="copy-url">
+            {t.copyFailed}
+          </label>
+          <input
+            id="copy-url"
+            className="input"
+            readOnly
+            value={href}
+            onFocus={(e) => e.target.select()}
+          />
+        </div>
+      ) : null}
+      <span className="sr-only" role="status">
+        {state === 'copied' ? t.linkCopied : ''}
+      </span>
+    </>
+  );
+}
+
+/** Shown instead of the Google button inside embedded app browsers. */
+export function InAppNotice({ browser }) {
+  const intent = browser.platform === 'android' ? chromeIntentUrl(window.location.href.split('#')[0]) : null;
+  return (
+    <div className="inapp-notice" role="note">
+      <p className="inapp-title">
+        <FiAlertCircle aria-hidden="true" /> {t.inAppTitle}
+      </p>
+      <p className="small">{t.inAppBody(browser.app)}</p>
+      <div className="inapp-actions">
+        <CopyLinkButton />
+        {intent ? (
+          <a className="btn btn-primary" href={intent}>
+            <FiChrome aria-hidden="true" /> {t.openInChrome}
+          </a>
+        ) : null}
+      </div>
+      <p className="field-hint">{browser.platform === 'android' ? t.inAppHintAndroid : t.inAppHintIos}</p>
+    </div>
+  );
+}
+
+/** A low-key disclosure for mobile users we could not classify (e.g. Telegram on iOS). */
+function GoogleTrouble() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="google-trouble">
+      <button
+        type="button"
+        className="link-btn"
+        aria-expanded={open}
+        aria-controls="google-trouble-body"
+        onClick={() => setOpen((o) => !o)}
+      >
+        {t.googleTrouble}
+      </button>
+      {open ? (
+        <div id="google-trouble-body" className="google-trouble-body">
+          <p className="small">{t.googleTroubleBody}</p>
+          <div className="inapp-actions">
+            <CopyLinkButton />
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function SessionNotice({ notice, onDismiss }) {
+  if (!notice) return null;
+  const expired = notice === 'expired';
+  return (
+    <div className={`notice-banner${expired ? ' is-warning' : ' is-error'}`} role="alert">
+      <span className="notice-icon" aria-hidden="true">
+        {expired ? <FiClock /> : <FiAlertCircle />}
+      </span>
+      <div className="notice-body">
+        {expired ? <p className="notice-title">{t.sessionExpiredTitle}</p> : null}
+        <p>{expired ? t.sessionExpired : t.googleFailed}</p>
+      </div>
+      <button type="button" className="icon-btn notice-close" onClick={onDismiss} aria-label={t.dismiss}>
+        <FiX aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+export function AuthScreen({
+  theme,
+  themePreference,
+  onCycleTheme,
+  onSession,
+  notice,
+  onDismissNotice,
+  lang,
+  onLang,
+}) {
   const [mode, setMode] = useState('login');
   const [googleErrors, setGoogleErrors] = useState([]);
+  const [browser] = useState(currentBrowser);
 
   const handleGoogle = async (idToken) => {
     setGoogleErrors([]);
@@ -239,9 +388,12 @@ export function AuthScreen({ theme, themePreference, onCycleTheme, onSession, no
     }
   };
 
+  const mobile = browser.platform === 'ios' || browser.platform === 'android';
+
   return (
     <div className="auth-page">
       <div className="auth-topbar">
+        <LanguageSwitch lang={lang} onChange={onLang} />
         <ThemeToggle preference={themePreference} onCycle={onCycleTheme} />
       </div>
       <main className="auth-card">
@@ -255,11 +407,7 @@ export function AuthScreen({ theme, themePreference, onCycleTheme, onSession, no
           </div>
         </div>
 
-        {notice ? (
-          <div className="notice" role="status">
-            {notice}
-          </div>
-        ) : null}
+        <SessionNotice notice={notice} onDismiss={onDismissNotice} />
 
         <div className="segmented segmented-block" role="group" aria-label={t.authModeLabel}>
           {[
@@ -283,8 +431,13 @@ export function AuthScreen({ theme, themePreference, onCycleTheme, onSession, no
         <div className="auth-divider">
           <span>{t.or}</span>
         </div>
-        {GOOGLE_CLIENT_ID ? (
-          <GoogleSignIn theme={theme} onToken={handleGoogle} />
+        {browser.inApp ? (
+          <InAppNotice browser={browser} />
+        ) : GOOGLE_CLIENT_ID ? (
+          <>
+            <GoogleSignIn theme={theme} onToken={handleGoogle} lang={lang} />
+            {mobile ? <GoogleTrouble /> : null}
+          </>
         ) : (
           <p className="field-hint center">{t.googleNotConfigured}</p>
         )}

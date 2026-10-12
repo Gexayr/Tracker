@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { FiPlus } from 'react-icons/fi';
-import { MAX_HABIT_NAME } from '../hooks/useMonthData';
+import { MAX_HABIT_NAME, MAX_HABITS } from '../hooks/useMonthData';
 import { t } from '../i18n';
+import { DayPicker } from './DayPicker';
 
 /** Returns an error string or '' for a proposed habit name. */
 export function validateHabitName(name, habits, selfId) {
@@ -17,16 +18,18 @@ export function validateHabitName(name, habits, selfId) {
 
 export function AddHabitForm({ habits, onAdd, disabled, autoFocus, onCancel }) {
   const [text, setText] = useState('');
+  const [days, setDays] = useState(null);
   const [error, setError] = useState('');
+  const full = habits.length >= MAX_HABITS;
 
   const submit = (e) => {
     e.preventDefault();
-    const err = validateHabitName(text, habits);
+    const err = full ? t.tooManyHabits(MAX_HABITS) : validateHabitName(text, habits);
     if (err) {
       setError(err);
       return;
     }
-    onAdd(text.trim());
+    onAdd(text.trim(), days ? { days } : {});
     setText('');
     setError('');
   };
@@ -55,9 +58,9 @@ export function AddHabitForm({ habits, onAdd, disabled, autoFocus, onCancel }) {
           onKeyDown={(e) => {
             if (e.key === 'Escape' && onCancel) onCancel();
           }}
-          disabled={disabled}
+          disabled={disabled || full}
         />
-        <button className="btn btn-primary" type="submit" disabled={disabled || !text.trim()}>
+        <button className="btn btn-primary" type="submit" disabled={disabled || full || !text.trim()}>
           <FiPlus aria-hidden="true" /> {t.add}
         </button>
         {onCancel ? (
@@ -66,11 +69,17 @@ export function AddHabitForm({ habits, onAdd, disabled, autoFocus, onCancel }) {
           </button>
         ) : null}
       </div>
-      {error ? (
+      {error || full ? (
         <p className="field-error" id="new-habit-error" role="alert">
-          {error}
+          {full ? t.tooManyHabits(MAX_HABITS) : error}
         </p>
       ) : null}
+      <div className="add-habit-days">
+        <span className="label" id="new-habit-days-label">
+          {t.schedule}
+        </span>
+        <DayPicker value={days} onChange={setDays} idPrefix="new-habit-days" />
+      </div>
     </form>
   );
 }

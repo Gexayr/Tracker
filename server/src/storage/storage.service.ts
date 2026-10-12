@@ -45,6 +45,23 @@ export class StorageService {
     return this.repo.findOne({ where: { userId, year, month } });
   }
 
+  /** All stored months of a year for the user, sorted by month (0-11). */
+  async getYearForUser(
+    userId: number,
+    year: number,
+  ): Promise<{ year: number; month: number; payload: HabitPayload }[]> {
+    const rows = await this.repo.find({
+      where: { userId, year },
+      order: { month: 'ASC' },
+      select: { year: true, month: true, payload: true },
+    });
+    return rows.map((r) => ({
+      year: r.year,
+      month: r.month,
+      payload: r.payload,
+    }));
+  }
+
   /**
    * Atomic insert-or-update on the (userId, year, month) unique constraint,
    * so concurrent PUTs for the same month cannot collide.

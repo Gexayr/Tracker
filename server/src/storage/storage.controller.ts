@@ -25,17 +25,32 @@ const intPipe = (name: string) =>
 export class StorageController {
   constructor(private readonly storageService: StorageService) {}
 
+  private assertYear(year: number) {
+    if (year < MIN_YEAR || year > MAX_YEAR) {
+      throw new BadRequestException(
+        `year must be between ${MIN_YEAR} and ${MAX_YEAR}`,
+      );
+    }
+  }
+
+  // Declared before ':year/:month'. The paths can't collide anyway: 'year' is a
+  // static segment and ':year/:month' would reject 'year' via ParseIntPipe.
+  @Get('year/:year')
+  async getYear(
+    @Req() req: { user: { sub: number } },
+    @Param('year', intPipe('year')) year: number,
+  ) {
+    this.assertYear(year);
+    return this.storageService.getYearForUser(req.user.sub, year);
+  }
+
   @Get(':year/:month')
   async get(
     @Req() req: { user: { sub: number } },
     @Param('year', intPipe('year')) year: number,
     @Param('month', intPipe('month')) month: number,
   ) {
-    if (year < MIN_YEAR || year > MAX_YEAR) {
-      throw new BadRequestException(
-        `year must be between ${MIN_YEAR} and ${MAX_YEAR}`,
-      );
-    }
+    this.assertYear(year);
     if (month < 0 || month > 11) {
       throw new BadRequestException('month must be between 0 and 11');
     }

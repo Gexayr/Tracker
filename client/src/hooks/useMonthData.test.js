@@ -116,8 +116,48 @@ test('stats', () => {
   const now = new Date(2026, 9, 12);
   const e = { 1: true, 2: true, 3: true, 5: true, 10: true, 11: true };
   const s = habitStats(e, 2026, 9, now);
-  expect(s).toEqual({ done: 6, eligible: 12, percent: 50, currentStreak: 2, bestStreak: 3 });
+  expect(s).toMatchObject({ done: 6, eligible: 12, percent: 50, currentStreak: 2, bestStreak: 3, target: null });
   expect(habitStats({ ...e, 12: true }, 2026, 9, now).currentStreak).toBe(3);
   expect(habitStats(e, 2026, 10, now).percent).toBe(null);
   expect(habitStats({ 30: true }, 2026, 8, now).percent).toBe(3);
+});
+
+// Separate months: a previous test's unmount flush may still land on 2026/9.
+test('optional habit fields survive load/save; invalid ones are dropped', async () => {
+  server['2026/3'] = {
+    habits: [
+      { id: 1, name: 'A', color: '#2a78d6', days: [1, 3, 5], target: 10, reminder: '08:30', archived: false },
+      { id: 2, name: 'B', days: [], target: 99, reminder: '25:00', archived: true },
+      { id: 3, name: 'C', days: [0, 1, 2, 3, 4, 5, 6] },
+    ],
+    data: {},
+  };
+  const { result } = renderHook(() => useMonthData({ token: 'x', year: 2026, month: 3, onUnauthorized: () => {} }));
+  await waitFor(() => expect(result.current.status).toBe('ready'));
+  expect(result.current.habits).toEqual([
+    { id: 1, name: 'A', color: '#2a78d6', days: [1, 3, 5], target: 10, reminder: '08:30' },
+    { id: 2, name: 'B', archived: true },
+    { id: 3, name: 'C' },
+  ]);
+  act(() => { result.current.editHabit(1, { days: null, target: null, reminder: null }); });
+  expect(result.current.habits[0]).toEqual({ id: 1, name: 'A', color: '#2a78d6' });
+  act(() => { result.current.addHabit('D', { days: [6, 0] }); });
+  expect(result.current.habits[3]).toMatchObject({ name: 'D', days: [0, 6] });
+  await waitFor(() => expect(result.current.saveStatus).toBe('saved'));
+  expect(puts[puts.length - 1].payload.habits[3].days).toEqual([0, 6]);
+});
+
+test('moveHabit reorders visible habits and keeps archived ones in place', async () => {
+  server['2026/4'] = {
+    habits: [{ id: 1, name: 'A' }, { id: 2, name: 'B', archived: true }, { id: 3, name: 'C' }, { id: 4, name: 'D' }],
+    data: {},
+  };
+  const { result } = renderHook(() => useMonthData({ token: 'x', year: 2026, month: 4, onUnauthorized: () => {} }));
+  await waitFor(() => expect(result.current.status).toBe('ready'));
+  act(() => { result.current.moveHabit(4, 0); });
+  expect(result.current.habits.map((h) => h.id)).toEqual([4, 2, 1, 3]);
+  act(() => { result.current.moveHabit(4, 2); });
+  expect(result.current.habits.map((h) => h.id)).toEqual([1, 2, 3, 4]);
+  await waitFor(() => expect(result.current.saveStatus).toBe('saved'));
+  expect(puts[puts.length - 1].payload.habits.map((h) => h.id)).toEqual([1, 2, 3, 4]);
 });

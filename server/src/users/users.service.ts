@@ -45,6 +45,22 @@ export class UsersService {
     });
   }
 
+  findById(id: number): Promise<User | null> {
+    return this.repo.findOne({ where: { id } });
+  }
+
+  /** Updates UI preferences; returns false if the user does not exist. */
+  async updatePreferences(
+    id: number,
+    patch: { locale?: string | null },
+  ): Promise<boolean> {
+    if (patch.locale === undefined) {
+      return (await this.repo.count({ where: { id } })) > 0;
+    }
+    const result = await this.repo.update({ id }, { locale: patch.locale });
+    return (result.affected ?? 0) > 0;
+  }
+
   async create(user: {
     name?: string | null;
     email: string;
