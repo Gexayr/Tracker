@@ -7,6 +7,7 @@ import { UsersModule } from '../users/users.module';
 import { JwtStrategy } from './jwt.strategy';
 import { StorageModule } from '../storage/storage.module';
 import { GoogleStrategy } from './google.strategy';
+import { getJwtSecret } from './jwt-secret';
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { GoogleStrategy } from './google.strategy';
     PassportModule,
     JwtModule.register({
       global: true,
-      secret: process.env.JWT_SECRET || 'dev_secret_change_me',
+      secret: getJwtSecret(),
       signOptions: { expiresIn: '7d' },
     }),
   ],

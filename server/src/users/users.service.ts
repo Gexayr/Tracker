@@ -1,8 +1,27 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Raw, Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { User } from './users.entity';
+import { normalizeEmail } from './email.util';
+
+export type SafeUser = Omit<User, 'passwordHash'>;
+
+const PG_UNIQUE_VIOLATION = '23505';
+
+function isUniqueViolation(e: unknown): boolean {
+  return (
+    e instanceof QueryFailedError &&
+    (e.driverError as { code?: string } | undefined)?.code ===
+      PG_UNIQUE_VIOLATION
+  );
+}
+
+export function toSafeUser(user: User): SafeUser {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { passwordHash, ...safe } = user;
+  return safe;
+}
 
 @Injectable()
 export class UsersService {
@@ -11,49 +30,77 @@ export class UsersService {
     private readonly repo: Repository<User>,
   ) {}
 
-  findAll() {
-    return this.repo.find({ select: { id: true, email: true, name: true, createdAt: true, updatedAt: true } });
+  /**
+   * Case-insensitive lookup. New rows are always stored normalized, but LOWER()
+   * also matches any legacy rows that were stored with mixed case.
+   */
+  findByEmail(email: string): Promise<User | null> {
+    const normalized = normalizeEmail(email);
+    return this.repo.findOne({
+      where: {
+        email: Raw((alias) => `LOWER(${alias}) = :email`, {
+          email: normalized,
+        }),
+      },
+    });
   }
 
-  findOne(id: number) {
-    return this.repo.findOne({ where: { id } });
-  }
-
-  findByEmail(email: string) {
-    return this.repo.findOne({ where: { email } });
-  }
-
-  async create(user: { name?: string | null; email: string; password: string }) {
-    const existing = await this.findByEmail(user.email);
+  async create(user: {
+    name?: string | null;
+    email: string;
+    password: string;
+  }): Promise<SafeUser> {
+    const email = normalizeEmail(user.email);
+    const existing = await this.findByEmail(email);
     if (existing) {
-      throw new Error('Email already in use');
+      throw new ConflictException('Email already in use');
     }
     const passwordHash = await bcrypt.hash(user.password, 10);
     const entity = this.repo.create({
-      email: user.email,
-      name: user.name ?? null,
+      email,
+      name: user.name || null,
       passwordHash,
     });
-    const saved = await this.repo.save(entity);
-    // Do not return passwordHash
-    const { passwordHash: _, ...safe } = saved as any;
-    return safe;
+    try {
+      const saved = await this.repo.save(entity);
+      return toSafeUser(saved);
+    } catch (e) {
+      // Concurrent registration with the same email
+      if (isUniqueViolation(e))
+        throw new ConflictException('Email already in use');
+      throw e;
+    }
   }
 
-  async upsertOAuthUser(email: string, name?: string | null) {
+  async upsertOAuthUser(
+    rawEmail: string,
+    name?: string | null,
+  ): Promise<SafeUser> {
+    const email = normalizeEmail(rawEmail);
     const existing = await this.findByEmail(email);
     if (existing) {
       // Update name if newly provided and previously null
       if (!existing.name && name) {
-        existing.name = name;
+        existing.name = name.slice(0, 255);
         await this.repo.save(existing);
       }
-      const { passwordHash: _, ...safe } = existing as any;
-      return safe;
+      return toSafeUser(existing);
     }
-    const entity = this.repo.create({ email, name: name ?? null, passwordHash: null });
-    const saved = await this.repo.save(entity);
-    const { passwordHash: _, ...safe } = saved as any;
-    return safe;
+    const entity = this.repo.create({
+      email,
+      name: name ? name.slice(0, 255) : null,
+      passwordHash: null,
+    });
+    try {
+      const saved = await this.repo.save(entity);
+      return toSafeUser(saved);
+    } catch (e) {
+      // Lost a race with a concurrent sign-in for the same email: use the winner's row
+      if (isUniqueViolation(e)) {
+        const winner = await this.findByEmail(email);
+        if (winner) return toSafeUser(winner);
+      }
+      throw e;
+    }
   }
 }

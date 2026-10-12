@@ -1,5 +1,13 @@
-import { Entity, Column, PrimaryGeneratedColumn, Index, ManyToOne, JoinColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  Index,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { User } from '../users/users.entity';
+import type { HabitPayload } from './storage.constants';
 
 @Entity()
 @Index(['userId', 'year', 'month'], { unique: true })
@@ -21,5 +29,5 @@ export class Storage {
   month: number; // 0-11
 
   @Column({ type: 'jsonb' })
-  payload: any; // { habits: Habit[], data: Record<string, Record<number, boolean>> }
+  payload: HabitPayload; // { habits: Habit[], data: Record<string, Record<number, boolean>> }
 }

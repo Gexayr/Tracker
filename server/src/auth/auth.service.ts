@@ -1,93 +1,100 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
-import { OAuth2Client } from 'google-auth-library';
-import { UsersService } from '../users/users.service';
+import { OAuth2Client, TokenPayload } from 'google-auth-library';
+import { SafeUser, toSafeUser, UsersService } from '../users/users.service';
 import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+  private readonly googleClientId = (process.env.GOOGLE_CLIENT_ID ?? '').trim();
+  private readonly googleClient = new OAuth2Client(
+    this.googleClientId || undefined,
+  );
+
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly storageService: StorageService,
   ) {}
 
-  private async getCurrentStorage(userId: number) {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const record = await this.storageService.getForUser(userId, year, month);
-
-    // Initialize only when there is no record or payload is missing.
-    // Do NOT overwrite when payload exists but is an empty object/array — that might be a legitimate saved state.
-    const noPayload = record?.payload == null || typeof record?.payload !== 'object';
-    const payloadMissingCore = !noPayload && (
-      typeof record?.payload?.habits === 'undefined' || typeof record?.payload?.data === 'undefined'
-    );
-    if (!record || noPayload || payloadMissingCore) {
-      // Auto-create default info for new/empty users
-      const defaultHabits = [
-        { id: 1, name: 'Meditation', color: '#8ecae6' },
-        { id: 2, name: 'Workout', color: '#219ebc' },
-        { id: 3, name: 'Read 30 min', color: '#ffd166' },
-        { id: 4, name: 'No sugar', color: '#06d6a0' },
-      ];
-      const initData: Record<number, Record<number, boolean>> = {} as any;
-      defaultHabits.forEach(h => (initData[h.id] = {}));
-      const created = await this.storageService.upsertForUser(userId, {
-        year,
-        month,
-        payload: { habits: defaultHabits, data: initData, chartType: 'line' },
-      } as any);
-      return { id: created.id, year: created.year, month: created.month, payload: created.payload };
-    }
-    return { id: record.id, year: record.year, month: record.month, payload: record.payload };
+  private async buildAuthResponse(user: SafeUser) {
+    const access_token = await this.signToken(user.id, user.email);
+    const storage = await this.storageService.ensureCurrentMonth(user.id);
+    return { user, access_token, storage };
   }
 
-  async register(input: { email: string; password: string; name?: string | null }) {
+  async register(input: {
+    email: string;
+    password: string;
+    name?: string | null;
+  }) {
     const user = await this.usersService.create({
       email: input.email,
       password: input.password,
       name: input.name ?? null,
     });
-    const token = await this.signToken(user.id, user.email);
-    const storage = await this.getCurrentStorage(user.id);
-    return { user, access_token: token, storage };
+    return this.buildAuthResponse(user);
   }
 
   async login(email: string, password: string) {
     const user = await this.usersService.findByEmail(email);
     if (!user) throw new UnauthorizedException('Invalid credentials');
+    if (!user.passwordHash) {
+      // Account was created via Google sign-in and has no password.
+      throw new UnauthorizedException(
+        'This account uses Google sign-in. Please continue with Google.',
+      );
+    }
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw new UnauthorizedException('Invalid credentials');
-    const { passwordHash: _, ...safe } = user as any;
-    const token = await this.signToken(user.id, user.email);
-    const storage = await this.getCurrentStorage(user.id);
-    return { user: safe, access_token: token, storage };
+    return this.buildAuthResponse(toSafeUser(user));
   }
 
   async signToken(sub: number, email: string) {
-    const payload = { sub, email };
-    return await this.jwtService.signAsync(payload);
+    return this.jwtService.signAsync({ sub, email });
+  }
+
+  /** Shared by POST /auth/google and the passport server-side OAuth callback. */
+  async oauthLogin(email: string, name?: string | null) {
+    const user = await this.usersService.upsertOAuthUser(email, name ?? null);
+    return this.buildAuthResponse(user);
   }
 
   async googleLogin(idToken: string) {
-    const clientId = process.env.GOOGLE_CLIENT_ID || '';
-    if (!clientId) {
-      throw new Error('GOOGLE_CLIENT_ID is not configured');
+    if (!this.googleClientId) {
+      this.logger.error(
+        'POST /auth/google called but GOOGLE_CLIENT_ID is not configured',
+      );
+      throw new ServiceUnavailableException(
+        'Google sign-in is not configured on the server',
+      );
     }
-    const client = new OAuth2Client(clientId);
-    const ticket = await client.verifyIdToken({ idToken, audience: clientId });
-    const payload = ticket.getPayload();
+    let payload: TokenPayload | undefined;
+    try {
+      const ticket = await this.googleClient.verifyIdToken({
+        idToken,
+        audience: this.googleClientId,
+      });
+      payload = ticket.getPayload();
+    } catch (e) {
+      this.logger.warn(
+        `Google ID token verification failed: ${(e as Error)?.message ?? e}`,
+      );
+      throw new UnauthorizedException('Invalid Google token');
+    }
     if (!payload || !payload.email) {
       throw new UnauthorizedException('Invalid Google token');
     }
-    const email = payload.email;
-    const name = payload.name ?? null;
-    const user = await this.usersService.upsertOAuthUser(email, name);
-    const token = await this.signToken(user.id, user.email);
-    const storage = await this.getCurrentStorage(user.id);
-    return { user, access_token: token, storage };
+    if (payload.email_verified === false) {
+      throw new UnauthorizedException('Google account email is not verified');
+    }
+    return this.oauthLogin(payload.email, payload.name ?? null);
   }
 }

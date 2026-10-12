@@ -1,19 +1,19 @@
-import { Controller, Post, Body, Get, UseGuards, Req, Res } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  UseGuards,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt.guard';
+import { GoogleOAuthGuard } from './google-oauth.guard';
 import type { Response } from 'express';
-
-class RegisterDto {
-  email: string;
-  password: string;
-  name?: string | null;
-}
-
-class LoginDto {
-  email: string;
-  password: string;
-}
+import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
+import { GoogleLoginDto } from './dto/google-login.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -31,28 +31,31 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('profile')
-  profile(@Req() req: any) {
+  profile(@Req() req: { user: { sub: number; email: string } }) {
     return { userId: req.user.sub, email: req.user.email };
   }
 
   @Post('google')
-  google(@Body() body: { idToken: string }) {
+  google(@Body() body: GoogleLoginDto) {
     return this.authService.googleLogin(body.idToken);
   }
 
   // Server-side OAuth flow (Passport Google OAuth 2.0)
   // Step 1: Redirect user to Google consent screen
   @Get('google/oauth')
-  @UseGuards(AuthGuard('google'))
-  async googleOAuth() {
+  @UseGuards(GoogleOAuthGuard)
+  googleOAuth() {
     // Guard handles redirect
     return;
   }
 
   // Step 2: Google redirects back to our callback URL
   @Get('google/callback')
-  @UseGuards(AuthGuard('google'))
-  async googleOAuthCallback(@Req() req: any, @Res() res: Response) {
+  @UseGuards(GoogleOAuthGuard)
+  googleOAuthCallback(
+    @Req() req: { user?: { access_token?: string } },
+    @Res() res: Response,
+  ) {
     // google.strategy.ts sets req.user = { user, access_token, storage }
     const payload = req.user;
 
