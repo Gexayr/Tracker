@@ -1,0 +1,66 @@
+# Production stack: optimized builds, no source bind-mounts, auto-restart.
+# Usage: docker-compose -f docker-compose.prod.yml up -d --build
+# Shares the "tracker" project name (and thus the db_data volume) with docker-compose.yml.
+name: tracker
+
+services:
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tracker}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: ${NODE_BASE_IMAGE:-mirror.gcr.io/library/node:20-alpine}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_NAME: ${POSTGRES_DB:-tracker}
+      PORT: 3001
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-https://back-tracking.amsoft.am/auth/google/callback}
+      FRONTEND_REDIRECT_URL: ${FRONTEND_REDIRECT_URL:-}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://tracking.amsoft.am}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${BACKEND_HOST_PORT:-3002}:3001"
+
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: ${NODE_BASE_IMAGE:-mirror.gcr.io/library/node:20-alpine}
+        REACT_APP_API_URL: ${API_URL:-https://back-tracking.amsoft.am}
+        REACT_APP_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:${FRONTEND_HOST_PORT:-8181}:80"
+
+volumes:
+  db_data:
