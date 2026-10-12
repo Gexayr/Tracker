@@ -95,11 +95,21 @@ export class UsersService {
     const email = normalizeEmail(rawEmail);
     const existing = await this.findByEmail(email);
     if (existing) {
+      let changed = false;
+      if (existing.passwordHash) {
+        // Emails are not verified at registration, so whoever set this password
+        // may not own the address. Google just proved ownership: drop the
+        // password and revoke every token issued for it (pre-hijack defence).
+        existing.passwordHash = null;
+        existing.sessionsValidAfter = new Date();
+        changed = true;
+      }
       // Update name if newly provided and previously null
       if (!existing.name && name) {
         existing.name = name.slice(0, 255);
-        await this.repo.save(existing);
+        changed = true;
       }
+      if (changed) await this.repo.save(existing);
       return toSafeUser(existing);
     }
     const entity = this.repo.create({
