@@ -10,10 +10,10 @@ const months = [
     payload: {
       habits: [
         { id: 1, name: 'Run, fast', days: [1, 3, 5], target: 2 },
-        { id: 2, name: 'Чтение "книг"' },
+        { id: 2, name: 'Чтение "книг"', amount: 50, unit: 'pages' },
         { id: 3, name: 'Old', archived: true },
       ],
-      data: { 1: { 2: true, 5: true }, 2: { 1: true, 3: true }, 3: { 1: true } },
+      data: { 1: { 2: true, 5: true }, 2: { 1: 50, 2: 20, 3: 60 }, 3: { 1: true } },
     },
   },
 ];
@@ -21,14 +21,14 @@ const months = [
 test('daily rows: one row per habit per elapsed day, archived excluded', () => {
   setLang('en');
   const rows = dailyRows(months, new Date(2026, 9, 3));
-  expect(rows[0]).toEqual(['date', 'weekday', 'habit', 'scheduled', 'done']);
+  expect(rows[0]).toEqual(['date', 'weekday', 'habit', 'scheduled', 'done', 'amount']);
   expect(rows.slice(1)).toEqual([
-    ['2026-10-01', 'Thursday', 'Run, fast', 'no', 0],
-    ['2026-10-01', 'Thursday', 'Чтение "книг"', 'yes', 1],
-    ['2026-10-02', 'Friday', 'Run, fast', 'yes', 1],
-    ['2026-10-02', 'Friday', 'Чтение "книг"', 'yes', 0],
-    ['2026-10-03', 'Saturday', 'Run, fast', 'no', 0],
-    ['2026-10-03', 'Saturday', 'Чтение "книг"', 'yes', 1],
+    ['2026-10-01', 'Thursday', 'Run, fast', 'no', 0, ''],
+    ['2026-10-01', 'Thursday', 'Чтение "книг"', 'yes', 1, 50],
+    ['2026-10-02', 'Friday', 'Run, fast', 'yes', 1, ''],
+    ['2026-10-02', 'Friday', 'Чтение "книг"', 'yes', 0, 20],
+    ['2026-10-03', 'Saturday', 'Run, fast', 'no', 0, ''],
+    ['2026-10-03', 'Saturday', 'Чтение "книг"', 'yes', 1, 60],
   ]);
 });
 
@@ -56,6 +56,6 @@ test('separator, filenames and localized headers', () => {
   expect(csvFilename('summary', 2026)).toBe('habits-summary-2026.csv');
   setLang('ru');
   const rows = dailyRows(months, new Date(2026, 9, 1));
-  expect(rows[0]).toEqual(['дата', 'день недели', 'привычка', 'запланировано', 'выполнено']);
-  expect(rows[1]).toEqual(['2026-10-01', 'четверг', 'Run, fast', 'нет', 0]);
+  expect(rows[0]).toEqual(['дата', 'день недели', 'привычка', 'запланировано', 'выполнено', 'количество']);
+  expect(rows[1]).toEqual(['2026-10-01', 'четверг', 'Run, fast', 'нет', 0, '']);
 });

@@ -15,6 +15,9 @@ import { daysInMonth, elapsedDays, monthRelation, weekday } from './date';
  * from the last elapsed scheduled day; for the current month an unchecked
  * *today* does not break the streak yet (it is still in progress).
  *
+ * A measurable habit (`amount`, e.g. 6000 with `unit` "steps") stores the
+ * logged number per day; the day is done once it reaches `amount`.
+ *
  * With a monthly `target`, goal progress is reported too (`target`,
  * `targetReached`, and `scheduledInMonth` for the bar scale).
  */
@@ -30,6 +33,36 @@ export function normalizeDays(days) {
 export function normalizeTarget(target) {
   const n = typeof target === 'string' && target.trim() !== '' ? Number(target) : target;
   return Number.isInteger(n) && n >= 1 && n <= 31 ? n : null;
+}
+
+export const MAX_AMOUNT = 1000000;
+export const MAX_UNIT = 24;
+
+/** Daily amount goal of a measurable habit (e.g. 6000 steps), or null. */
+export function normalizeAmount(amount) {
+  const n = typeof amount === 'string' && amount.trim() !== '' ? Number(amount.replace(',', '.')) : amount;
+  return typeof n === 'number' && Number.isFinite(n) && n > 0 && n <= MAX_AMOUNT ? Math.round(n * 100) / 100 : null;
+}
+
+export function normalizeUnit(unit) {
+  return typeof unit === 'string' ? unit.trim().slice(0, MAX_UNIT) : '';
+}
+
+export const isMeasurable = (habit) => normalizeAmount(habit?.amount) !== null;
+
+/** Logged amount for a day entry (numbers for measurable habits; `true` = no amount). */
+export const entryAmount = (v) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
+
+/**
+ * Whether a day entry counts as done. `true` always does; a number does when
+ * it reaches the habit's daily amount (any positive number for a plain habit).
+ */
+export function isDone(habit, v) {
+  if (v === true) return true;
+  const n = entryAmount(v);
+  if (!n) return false;
+  const goal = normalizeAmount(habit?.amount);
+  return goal === null || n >= goal;
 }
 
 const scheduleCache = new WeakMap();
@@ -64,7 +97,7 @@ export function habitStats(entries, year, month, now = new Date(), habit = null)
   for (let d = 1; d <= elapsed; d++) {
     if (!on(d)) continue; // rest day: neither counts nor breaks
     eligible++;
-    if (e[d]) {
+    if (isDone(habit, e[d])) {
       done++;
       run++;
       if (run > best) best = run;
@@ -75,10 +108,10 @@ export function habitStats(entries, year, month, now = new Date(), habit = null)
 
   let current = 0;
   let d = elapsed;
-  if (isCurrent && d > 0 && on(d) && !e[d]) d--; // today still open
+  if (isCurrent && d > 0 && on(d) && !isDone(habit, e[d])) d--; // today still open
   for (; d >= 1; d--) {
     if (!on(d)) continue;
-    if (!e[d]) break;
+    if (!isDone(habit, e[d])) break;
     current++;
   }
 
@@ -105,7 +138,7 @@ export function dayCompletion(habits, data, year, month, day) {
   habits.forEach((h) => {
     if (!isScheduled(h, year, month, day)) return;
     total++;
-    if (data?.[h.id]?.[day]) done++;
+    if (isDone(h, data?.[h.id]?.[day])) done++;
   });
   return { done, total };
 }

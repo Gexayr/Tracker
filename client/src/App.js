@@ -3,6 +3,7 @@ import { AnimatePresence, MotionConfig } from 'framer-motion';
 import { FiAlertTriangle, FiRefreshCw } from 'react-icons/fi';
 import { apiProfile, apiUpdateProfile } from './api';
 import { AddHabitToggle } from './components/AddHabitForm';
+import { AmountDialog } from './components/AmountDialog';
 import { ArchivedList } from './components/ArchivedList';
 import { AuthScreen } from './components/AuthScreen';
 import { HabitDialog } from './components/HabitDialog';
@@ -22,7 +23,7 @@ import { loadYear, useYearData, withLiveMonth } from './hooks/useYearData';
 import { getLang, hasSavedLang, normalizeLang, rememberProfileLang, setLang, t } from './i18n';
 import { csvFilename, dailyRows, downloadCsv, summaryRows } from './utils/csv';
 import { formatMonthName, monthRelation, shiftMonth } from './utils/date';
-import { activeHabits, habitStats } from './utils/progress';
+import { activeHabits, habitStats, isDone, isMeasurable } from './utils/progress';
 import { isTokenExpired } from './utils/session';
 import { safeStorage } from './utils/storage';
 
@@ -88,6 +89,7 @@ export default function App() {
   });
   const [heatYear, setHeatYear] = useState(() => now.getFullYear());
   const [editingId, setEditingId] = useState(null);
+  const [logging, setLogging] = useState(null); // { id, day } of a measurable habit
   const [toast, setToast] = useState(null);
   const [announce, setAnnounce] = useState('');
   const [exporting, setExporting] = useState(false);
@@ -164,6 +166,7 @@ export default function App() {
   useEffect(() => {
     setToast(null);
     setEditingId(null);
+    setLogging(null);
   }, [year, month]);
 
   const active = useMemo(() => activeHabits(habits), [habits]);
@@ -182,8 +185,18 @@ export default function App() {
   // --- reminders (client-side, only while the page is open) ---------------
   const liveRef = useRef(null);
   liveRef.current = ready ? { key: monthData.key, habits, data } : null;
-  const toggleRef = useRef(monthData.toggleDay);
-  toggleRef.current = monthData.toggleDay;
+  const toggleDay = monthData.toggleDay;
+  /** Plain habits toggle; measurable ones ask how much was done. */
+  const onCell = useCallback(
+    (id, day) => {
+      const h = habits.find((x) => x.id === id);
+      if (h && isMeasurable(h)) setLogging({ id, day });
+      else toggleDay(id, day);
+    },
+    [habits, toggleDay]
+  );
+  const toggleRef = useRef(onCell);
+  toggleRef.current = onCell;
 
   const onReminder = useCallback(
     (h) => {
@@ -195,7 +208,7 @@ export default function App() {
         actionLabel: t.markDoneShort,
         onAction: () => {
           const live = liveRef.current;
-          if (live && live.key === curKey && !live.data[h.id]?.[day]) toggleRef.current(h.id, day);
+          if (live && live.key === curKey && !isDone(h, live.data[h.id]?.[day])) toggleRef.current(h.id, day);
           else if (!live || live.key !== curKey) setYm({ year: n.getFullYear(), month: n.getMonth() });
         },
       });
@@ -270,6 +283,7 @@ export default function App() {
 
   // --- habit actions ----------------------------------------------------------
   const editing = habits.find((h) => h.id === editingId) || null;
+  const loggingHabit = (logging && habits.find((h) => h.id === logging.id && isMeasurable(h))) || null;
   const editingPos = editing ? active.findIndex((h) => h.id === editing.id) : -1;
 
   const announceMove = useCallback(
@@ -404,7 +418,7 @@ export default function App() {
               stats={stats}
               now={now}
               theme={theme}
-              onToggle={monthData.toggleDay}
+              onToggle={onCell}
               onEdit={(h) => setEditingId(h.id)}
               onGoToday={() => setYm({ year: now.getFullYear(), month: now.getMonth() })}
               onMove={monthData.moveHabit}
@@ -429,7 +443,7 @@ export default function App() {
                 stats={stats}
                 now={now}
                 theme={theme}
-                onToggle={monthData.toggleDay}
+                onToggle={onCell}
                 onEdit={(h) => setEditingId(h.id)}
                 onMove={monthData.moveHabit}
                 onAnnounce={announceMove}
@@ -514,6 +528,22 @@ export default function App() {
               onSave={(changes) => {
                 monthData.editHabit(editing.id, changes);
                 setEditingId(null);
+              }}
+            />
+          ) : null}
+          {loggingHabit && !editing ? (
+            <AmountDialog
+              key={`${loggingHabit.id}-${logging.day}`}
+              habit={loggingHabit}
+              year={year}
+              month={month}
+              day={logging.day}
+              value={data[loggingHabit.id]?.[logging.day]}
+              theme={theme}
+              onClose={() => setLogging(null)}
+              onSave={(value) => {
+                monthData.setDayAmount(loggingHabit.id, logging.day, value);
+                setLogging(null);
               }}
             />
           ) : null}

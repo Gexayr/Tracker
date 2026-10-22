@@ -1,4 +1,4 @@
-import { dailyCompletion, habitStats, overallStats } from './progress';
+import { dailyCompletion, habitStats, isDone, isMeasurable, normalizeAmount, overallStats } from './progress';
 
 // October 2026: the 1st is a Thursday. Mondays: 5, 12, 19, 26. Wednesdays: 7, 14, 21, 28.
 const MON_WED_FRI = { id: 1, name: 'Gym', days: [1, 3, 5] };
@@ -56,4 +56,30 @@ test('daily and overall completion only consider scheduled habits', () => {
   expect(overallStats(habits, data, 2026, 9, now)).toEqual({ done: 3, eligible: 7, percent: 43 });
   // A day where nothing is scheduled is a gap, not 0%.
   expect(dailyCompletion([{ id: 1, days: [1] }], {}, 2026, 9, now).slice(0, 5)).toEqual([null, null, null, null, 0]);
+});
+
+test('measurable habits: a day is done once the amount reaches the daily goal', () => {
+  const steps = { id: 1, name: 'Walk', amount: 6000, unit: 'steps' };
+  expect(isMeasurable(steps)).toBe(true);
+  expect(isMeasurable({ id: 2, name: 'Read' })).toBe(false);
+  expect(isDone(steps, 6000)).toBe(true);
+  expect(isDone(steps, 7200)).toBe(true);
+  expect(isDone(steps, 5999)).toBe(false);
+  expect(isDone(steps, undefined)).toBe(false);
+  expect(isDone(steps, true)).toBe(true); // marked before it became measurable
+  expect(isDone({ id: 2, name: 'Read' }, 3)).toBe(true); // amount kept after it became plain
+
+  const now = new Date(2026, 9, 31);
+  const s = habitStats({ 1: 6000, 2: 3000, 3: 6500, 4: 8000 }, 2026, 9, now, steps);
+  expect(s.done).toBe(3);
+  expect(s.bestStreak).toBe(2);
+});
+
+test('amount normalization', () => {
+  expect(normalizeAmount('6000')).toBe(6000);
+  expect(normalizeAmount('2,5')).toBe(2.5);
+  expect(normalizeAmount(0)).toBeNull();
+  expect(normalizeAmount(-1)).toBeNull();
+  expect(normalizeAmount('abc')).toBeNull();
+  expect(normalizeAmount(1e7)).toBeNull();
 });

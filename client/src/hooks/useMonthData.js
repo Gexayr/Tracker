@@ -3,7 +3,7 @@ import { apiGetMonth, apiPutMonth } from '../api';
 import { t } from '../i18n';
 import { DEFAULT_HABITS, nextHabitColor } from '../utils/color';
 import { monthKey } from '../utils/date';
-import { normalizeDays, normalizeTarget } from '../utils/progress';
+import { normalizeAmount, normalizeDays, normalizeTarget, normalizeUnit } from '../utils/progress';
 
 const SAVE_DEBOUNCE_MS = 500;
 const CHART_TYPES = ['line', 'bar', 'radar'];
@@ -22,6 +22,12 @@ export function cleanHabit(h) {
   if (days) out.days = days;
   const target = normalizeTarget(h.target);
   if (target !== null) out.target = target;
+  const amount = normalizeAmount(h.amount);
+  if (amount !== null) {
+    out.amount = amount;
+    const unit = normalizeUnit(h.unit);
+    if (unit) out.unit = unit;
+  }
   if (typeof h.reminder === 'string' && REMINDER_RE.test(h.reminder)) out.reminder = h.reminder;
   if (h.archived === true) out.archived = true;
   return out;
@@ -246,7 +252,21 @@ export function useMonthData({ token, year, month, onUnauthorized }) {
     [update]
   );
 
-  /** extra: { color?, days?, target?, reminder? } */
+  /** Logs an amount for a measurable habit; 0/empty clears the day. */
+  const setDayAmount = useCallback(
+    (habitId, day, value) =>
+      update((s) => {
+        const entries = { ...(s.data[habitId] || {}) };
+        const n = normalizeAmount(value);
+        if (n === null) delete entries[day];
+        else entries[day] = n;
+        if (entries[day] === s.data[habitId]?.[day]) return null;
+        return { data: { ...s.data, [habitId]: entries } };
+      }),
+    [update]
+  );
+
+  /** extra: { color?, days?, target?, reminder?, amount?, unit? } */
   const addHabit = useCallback(
     (name, extra = {}) =>
       update((s) => {
@@ -326,6 +346,7 @@ export function useMonthData({ token, year, month, onUnauthorized }) {
     ...state,
     saveStatus,
     toggleDay,
+    setDayAmount,
     addHabit,
     editHabit,
     moveHabit,

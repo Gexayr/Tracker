@@ -8,6 +8,7 @@ import { notificationState, requestNotificationPermission } from '../utils/notif
 import { normalizeDays, normalizeTarget } from '../utils/progress';
 import { validateHabitName } from './AddHabitForm';
 import { DayPicker } from './DayPicker';
+import { MeasureFields, measureChanges, measureState, validateMeasure } from './MeasureFields';
 
 function NotificationHint({ state }) {
   const text =
@@ -41,6 +42,8 @@ export function HabitDialog({
   const [color, setColor] = useState(habit.color);
   const [days, setDays] = useState(() => normalizeDays(habit.days));
   const [target, setTarget] = useState(() => (normalizeTarget(habit.target) ? String(habit.target) : ''));
+  const [measure, setMeasure] = useState(() => measureState(habit));
+  const [measureError, setMeasureError] = useState('');
   const [reminder, setReminder] = useState(habit.reminder || '');
   const [notif, setNotif] = useState(notificationState);
   const [error, setError] = useState('');
@@ -90,8 +93,10 @@ export function HabitDialog({
     const tv = target.trim();
     const tErr = tv && normalizeTarget(tv) === null ? t.targetInvalid : '';
     setError(err);
+    const mErr = validateMeasure(measure);
     setTargetError(tErr);
-    if (err || tErr) return;
+    setMeasureError(mErr);
+    if (err || tErr || mErr) return;
     if (reminder && reminder !== habit.reminder) await askPermission();
     onSave({
       name: name.trim(),
@@ -99,6 +104,7 @@ export function HabitDialog({
       days,
       target: tv ? Number(tv) : null,
       reminder: reminder || null,
+      ...measureChanges(measure),
     });
   };
 
@@ -187,6 +193,16 @@ export function HabitDialog({
             <DayPicker value={days} onChange={setDays} idPrefix="habit-days" />
             <p className="field-hint">{t.scheduleHint}</p>
           </div>
+
+          <MeasureFields
+            value={measure}
+            onChange={(m) => {
+              setMeasure(m);
+              if (measureError) setMeasureError('');
+            }}
+            error={measureError}
+            idPrefix="habit-measure"
+          />
 
           <div className="field-row">
             <div className="field">

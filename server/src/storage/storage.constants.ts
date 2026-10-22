@@ -7,6 +7,8 @@ export const MAX_DATA_KEYS = 500;
 
 export const MIN_HABIT_TARGET = 1;
 export const MAX_HABIT_TARGET = 31;
+export const MAX_HABIT_AMOUNT = 1_000_000;
+export const MAX_HABIT_UNIT_LENGTH = 24;
 const REMINDER_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export interface Habit {
@@ -17,6 +19,10 @@ export interface Habit {
   days?: number[];
   /** Monthly goal of completed days. */
   target?: number;
+  /** Measurable habit: daily amount goal (e.g. 6000); day entries are numbers. */
+  amount?: number;
+  /** Unit for `amount`, e.g. "steps". */
+  unit?: string;
   /** Daily reminder time "HH:MM" (24h), or null for none. */
   reminder?: string | null;
   archived?: boolean;
@@ -25,7 +31,8 @@ export interface Habit {
 
 export interface HabitPayload {
   habits: Habit[];
-  data: Record<string, Record<string, boolean>>;
+  /** habitId -> day -> true, or the logged amount for measurable habits. */
+  data: Record<string, Record<string, boolean | number>>;
   chartType?: string;
   [key: string]: any;
 }
@@ -66,6 +73,22 @@ function validateOptionalHabitFields(
       (t as number) > MAX_HABIT_TARGET
     ) {
       return `payload.habits[${i}].target must be an integer between ${MIN_HABIT_TARGET} and ${MAX_HABIT_TARGET}`;
+    }
+  }
+  if (h.amount !== undefined) {
+    const a = h.amount;
+    if (
+      typeof a !== 'number' ||
+      !Number.isFinite(a) ||
+      a <= 0 ||
+      a > MAX_HABIT_AMOUNT
+    ) {
+      return `payload.habits[${i}].amount must be a number greater than 0 and at most ${MAX_HABIT_AMOUNT}`;
+    }
+  }
+  if (h.unit !== undefined) {
+    if (typeof h.unit !== 'string' || h.unit.length > MAX_HABIT_UNIT_LENGTH) {
+      return `payload.habits[${i}].unit must be a string of at most ${MAX_HABIT_UNIT_LENGTH} characters`;
     }
   }
   if (h.reminder !== undefined && h.reminder !== null) {

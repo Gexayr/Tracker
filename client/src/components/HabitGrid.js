@@ -13,7 +13,7 @@ import {
   monthRelation,
   weekdayInitial,
 } from '../utils/date';
-import { isScheduled } from '../utils/progress';
+import { entryAmount, isDone, isScheduled, normalizeAmount } from '../utils/progress';
 
 export function HabitGrid({ year, month, habits, data, stats, now, theme, onToggle, onEdit, onMove, onAnnounce }) {
   const total = daysInMonth(year, month);
@@ -125,6 +125,7 @@ export function HabitGrid({ year, month, habits, data, stats, now, theme, onTogg
             const fg = textOn(bg);
             const s = stats[h.id];
             const entries = data[h.id] || {};
+            const goal = normalizeAmount(h.amount);
             const drag = reorder.itemProps(h.id);
             return (
               <tr key={h.id} ref={reorder.itemRef(h.id)} className={drag.className} style={drag.style}>
@@ -150,10 +151,12 @@ export function HabitGrid({ year, month, habits, data, stats, now, theme, onTogg
                   </div>
                 </th>
                 {days.map((d) => {
-                  const done = !!entries[d];
+                  const done = isDone(h, entries[d]);
+                  const amount = goal ? entryAmount(entries[d]) : 0;
+                  const partial = !done && amount > 0;
                   const future = d > elapsed;
                   const off = !isScheduled(h, year, month, d);
-                  const locked = off && !done; // rest day: nothing to mark
+                  const locked = off && !done && !partial; // rest day: nothing to mark
                   const cls = [
                     'day-cell',
                     isWeekend(year, month, d) && 'is-weekend',
@@ -171,15 +174,26 @@ export function HabitGrid({ year, month, habits, data, stats, now, theme, onTogg
                     : done
                     ? t.done
                     : t.notDone;
+                  const label = t.cellLabel(
+                    h.name,
+                    formatDayMonth(year, month, d),
+                    goal && amount ? `${state}, ${t.amountOf(amount, goal, h.unit)}` : state
+                  );
                   return (
                     <td key={d} className={cls}>
                       <button
                         type="button"
-                        className={`cell${done ? ' done' : ''}${off ? ' off' : ''}`}
-                        style={{ '--c': bg, '--on-c': fg }}
-                        aria-pressed={locked ? undefined : done}
+                        className={`cell${done ? ' done' : ''}${partial ? ' partial' : ''}${off ? ' off' : ''}`}
+                        style={{
+                          '--c': bg,
+                          '--on-c': fg,
+                          ...(partial ? { '--fill': `${Math.round((amount / goal) * 100)}%` } : null),
+                        }}
+                        aria-pressed={locked || goal ? undefined : done}
+                        aria-haspopup={goal && !locked ? 'dialog' : undefined}
                         aria-disabled={locked || undefined}
-                        aria-label={t.cellLabel(h.name, formatDayMonth(year, month, d), state)}
+                        aria-label={label}
+                        title={goal && amount ? t.amountOf(amount, goal, h.unit) : undefined}
                         disabled={future}
                         tabIndex={fr === r && fc === d ? 0 : -1}
                         data-r={r}

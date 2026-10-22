@@ -18,11 +18,14 @@ describe('validateHabitPayload', () => {
           target: 12,
           reminder: '07:30',
           archived: false,
+          amount: 6000,
+          unit: 'steps',
         }),
       ),
     ).toBeNull();
     expect(validateHabitPayload(base({ reminder: null }))).toBeNull();
     expect(validateHabitPayload(base({ reminder: '23:59' }))).toBeNull();
+    expect(validateHabitPayload(base({ amount: 2.5 }))).toBeNull();
   });
 
   it.each([
@@ -38,6 +41,12 @@ describe('validateHabitPayload', () => {
     [{ reminder: '7:30' }, 'reminder'],
     [{ reminder: 730 }, 'reminder'],
     [{ archived: 'yes' }, 'archived'],
+    [{ amount: 0 }, 'amount'],
+    [{ amount: -5 }, 'amount'],
+    [{ amount: '6000' }, 'amount'],
+    [{ amount: 1e7 }, 'amount'],
+    [{ unit: 5 }, 'unit'],
+    [{ unit: 'x'.repeat(25) }, 'unit'],
   ])('rejects %j', (habit, field) => {
     expect(validateHabitPayload(base(habit))).toContain(`.${field} `);
   });

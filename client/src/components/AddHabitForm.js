@@ -3,6 +3,7 @@ import { FiPlus } from 'react-icons/fi';
 import { MAX_HABIT_NAME, MAX_HABITS } from '../hooks/useMonthData';
 import { t } from '../i18n';
 import { DayPicker } from './DayPicker';
+import { MeasureFields, measureChanges, measureState, validateMeasure } from './MeasureFields';
 
 /** Returns an error string or '' for a proposed habit name. */
 export function validateHabitName(name, habits, selfId) {
@@ -19,19 +20,21 @@ export function validateHabitName(name, habits, selfId) {
 export function AddHabitForm({ habits, onAdd, disabled, autoFocus, onCancel }) {
   const [text, setText] = useState('');
   const [days, setDays] = useState(null);
+  const [measure, setMeasure] = useState(() => measureState(null));
   const [error, setError] = useState('');
+  const [measureError, setMeasureError] = useState('');
   const full = habits.length >= MAX_HABITS;
 
   const submit = (e) => {
     e.preventDefault();
     const err = full ? t.tooManyHabits(MAX_HABITS) : validateHabitName(text, habits);
-    if (err) {
-      setError(err);
-      return;
-    }
-    onAdd(text.trim(), days ? { days } : {});
+    const mErr = full ? '' : validateMeasure(measure);
+    setError(err);
+    setMeasureError(mErr);
+    if (err || mErr) return;
+    onAdd(text.trim(), { ...(days ? { days } : {}), ...measureChanges(measure) });
     setText('');
-    setError('');
+    setMeasure(measureState(null));
   };
 
   return (
@@ -80,6 +83,15 @@ export function AddHabitForm({ habits, onAdd, disabled, autoFocus, onCancel }) {
         </span>
         <DayPicker value={days} onChange={setDays} idPrefix="new-habit-days" />
       </div>
+      <MeasureFields
+        value={measure}
+        onChange={(m) => {
+          setMeasure(m);
+          if (measureError) setMeasureError('');
+        }}
+        error={measureError}
+        idPrefix="new-habit-measure"
+      />
     </form>
   );
 }

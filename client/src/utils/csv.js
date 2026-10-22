@@ -1,6 +1,6 @@
 import { getLang, t } from '../i18n';
 import { daysInMonth, elapsedDays, isoDate, isoMonth, weekday, weekdayNameLong } from './date';
-import { activeHabits, habitStats, isScheduled } from './progress';
+import { activeHabits, entryAmount, habitStats, isDone, isMeasurable, isScheduled } from './progress';
 
 /** Excel uses the regional list separator: ';' for Russian locales, ',' otherwise. */
 export const csvSeparator = (lang = getLang()) => (lang === 'ru' ? ';' : ',');
@@ -31,9 +31,12 @@ function monthHabits(m) {
 const sortMonths = (months) =>
   [...(months || [])].filter(Boolean).sort((a, b) => a.year * 12 + a.month - (b.year * 12 + b.month));
 
-/** Rows: date, weekday, habit, scheduled (yes/no), done (0/1) — days up to today only. */
+/**
+ * Rows: date, weekday, habit, scheduled (yes/no), done (0/1), amount (measurable
+ * habits only) — days up to today only.
+ */
 export function dailyRows(months, now = new Date()) {
-  const rows = [[t.csvDate, t.csvWeekday, t.csvHabit, t.csvScheduled, t.csvDone]];
+  const rows = [[t.csvDate, t.csvWeekday, t.csvHabit, t.csvScheduled, t.csvDone, t.csvAmount]];
   sortMonths(months).forEach((m) => {
     const { habits, data } = monthHabits(m);
     const last = Math.min(elapsedDays(m.year, m.month, now), daysInMonth(m.year, m.month));
@@ -46,7 +49,8 @@ export function dailyRows(months, now = new Date()) {
           wd,
           h.name,
           isScheduled(h, m.year, m.month, d) ? t.csvYes : t.csvNo,
-          data[h.id]?.[d] ? 1 : 0,
+          isDone(h, data[h.id]?.[d]) ? 1 : 0,
+          isMeasurable(h) ? entryAmount(data[h.id]?.[d]) : '',
         ]);
       });
     }

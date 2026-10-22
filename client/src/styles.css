@@ -1095,7 +1095,8 @@ button:disabled {
   grid-template-columns: auto minmax(0, 1fr) auto;
   grid-template-areas:
     "handle name toggle"
-    "handle streak toggle";
+    "handle streak toggle"
+    "handle amount toggle";
   align-items: center;
   column-gap: var(--space-3);
 }
@@ -2599,6 +2600,135 @@ body.is-reordering * {
 
   .auth-topbar {
     right: var(--space-2);
+  }
+}
+
+/* =========================================================================
+   Measurable habits (an amount per day, e.g. 6000 steps)
+   ========================================================================= */
+.measure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.add-habit .measure {
+  margin-top: var(--space-3);
+}
+
+.check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.check-row input {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  flex: none;
+  accent-color: var(--accent-strong);
+}
+
+.check-row > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.field .check-row .check-label,
+.check-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.field .check-row .field-hint {
+  font-weight: 400;
+}
+
+.measure-row {
+  display: grid;
+  grid-template-columns: minmax(0, 160px) minmax(0, 200px);
+  gap: var(--space-3);
+  padding-left: calc(18px + var(--space-2));
+}
+
+.measure-error {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+
+/* Partially reached amount: fill from the bottom. */
+.cell.partial,
+.mini-day.partial {
+  background-image: linear-gradient(to top, var(--c) var(--fill, 0%), transparent var(--fill, 0%));
+  border-color: var(--c);
+}
+
+.cell.off.partial,
+.mini-day.off.partial {
+  background-image: linear-gradient(to top, var(--c) var(--fill, 0%), transparent var(--fill, 0%));
+  cursor: pointer;
+}
+
+.big-toggle.partial {
+  border-color: var(--c);
+  background-image: linear-gradient(to top, var(--c) var(--fill, 0%), transparent var(--fill, 0%));
+  color: var(--text);
+}
+
+.today-amount {
+  grid-area: amount;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: 4px;
+  padding-left: calc(var(--space-3) + 18px);
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.today-amount-bar {
+  flex: 0 1 120px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--track);
+  overflow: hidden;
+}
+
+.today-amount-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--c);
+  transition: width 0.3s ease;
+}
+
+.dialog-small {
+  max-width: 380px;
+}
+
+.dialog-small .card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.amount-unit {
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.amount-bar {
+  margin-top: var(--space-1);
+}
+
+@media (max-width: 640px) {
+  .measure-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    padding-left: 0;
   }
 }
 

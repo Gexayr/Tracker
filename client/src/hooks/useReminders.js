@@ -3,7 +3,7 @@ import { apiGetMonth } from '../api';
 import { t } from '../i18n';
 import { isoDate } from '../utils/date';
 import { showNotification } from '../utils/notify';
-import { activeHabits, isScheduled } from '../utils/progress';
+import { activeHabits, isDone, isScheduled } from '../utils/progress';
 
 const CHECK_MS = 30 * 1000;
 const LATE_WINDOW_MS = 60 * 60 * 1000; // fire up to 1h late (sleeping tab, throttled timers)
@@ -23,7 +23,7 @@ export function dueReminders(habits, data, now, fired) {
     const at = minutesOf(h.reminder);
     if (at === null || at > nowMin) return false;
     if ((nowMin - at) * 60000 > LATE_WINDOW_MS) return false;
-    if (!isScheduled(h, y, mo, d) || data?.[h.id]?.[d]) return false;
+    if (!isScheduled(h, y, mo, d) || isDone(h, data?.[h.id]?.[d])) return false;
     return !fired.has(`${isoDate(y, mo, d)}|${h.id}|${h.reminder}`);
   });
 }
