@@ -6,6 +6,7 @@ import { AddHabitToggle } from './components/AddHabitForm';
 import { AmountDialog } from './components/AmountDialog';
 import { ArchivedList } from './components/ArchivedList';
 import { AuthScreen } from './components/AuthScreen';
+import { BottomNav } from './components/BottomNav';
 import { HabitDialog } from './components/HabitDialog';
 import { HabitGrid } from './components/HabitGrid';
 import { Header } from './components/Header';
@@ -508,9 +509,13 @@ export default function App() {
         />
 
         <main className="app-main">
-          {viewSwitch}
+          {isMobile ? null : viewSwitch}
           {content}
         </main>
+
+        {isMobile ? (
+          <BottomNav views={views} active={shownView} labels={viewLabels} onChange={changeView} />
+        ) : null}
 
         <AnimatePresence>
           {editing ? (

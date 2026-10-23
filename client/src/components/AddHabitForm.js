@@ -105,8 +105,9 @@ export function AddHabitToggle({ habits, onAdd, disabled }) {
         className="btn btn-ghost add-habit-btn"
         onClick={() => setOpen(true)}
         disabled={disabled}
+        aria-label={t.addHabit}
       >
-        <FiPlus aria-hidden="true" /> {t.addHabit}
+        <FiPlus aria-hidden="true" /> <span className="btn-label">{t.addHabit}</span>
       </button>
     );
   }

@@ -165,6 +165,7 @@
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  overscroll-behavior-y: none;
 }
 
 body {
@@ -177,6 +178,18 @@ body {
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+button,
+.icon-btn,
+.btn,
+.bottom-nav-item,
+.habit-name-btn,
+.drag-handle {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 h1,
@@ -249,7 +262,7 @@ button:disabled {
   font-weight: 600;
   font-size: 14px;
   white-space: nowrap;
-  transition: background-color 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s, transform 0.08s;
 }
 
 .btn:disabled {
@@ -309,7 +322,7 @@ button:disabled {
   background: transparent;
   color: var(--text-2);
   font-size: 18px;
-  transition: background-color 0.15s, color 0.15s;
+  transition: background-color 0.15s, color 0.15s, transform 0.08s;
 }
 
 .icon-btn:hover {
@@ -676,6 +689,39 @@ button:disabled {
   min-width: 0;
 }
 
+/* =========================================================================
+   Bottom tab bar (mobile app shell)
+   ========================================================================= */
+.bottom-nav {
+  display: none;
+}
+
+.bottom-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 52px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  transition: color 0.15s, transform 0.08s;
+}
+
+.bottom-nav-item svg {
+  font-size: 20px;
+}
+
+.bottom-nav-item.active {
+  color: var(--accent);
+}
+
 .save-status {
   display: inline-flex;
   align-items: center;
@@ -974,6 +1020,7 @@ button:disabled {
   text-align: left;
   font-weight: 600;
   font-size: 14px;
+  transition: transform 0.08s;
 }
 
 .habit-name-btn:hover {
@@ -1088,6 +1135,7 @@ button:disabled {
 
 .today-card {
   padding: var(--space-3) var(--space-3) var(--space-3) var(--space-2);
+  transition: transform 0.08s;
 }
 
 .today-top {
@@ -2244,6 +2292,7 @@ body.is-reordering * {
   border-radius: var(--radius-sm);
   background: var(--surface);
   text-align: left;
+  transition: border-color 0.15s, background-color 0.15s, transform 0.08s;
 }
 
 .month-chip:hover:not(:disabled) {
@@ -2327,6 +2376,16 @@ body.is-reordering * {
   :root {
     --cell: 40px;
   }
+
+  /* App-like tap feedback instead of hover states. */
+  .btn:active:not(:disabled),
+  .icon-btn:active:not(:disabled),
+  .bottom-nav-item:active,
+  .today-card:active,
+  .month-chip:active:not(:disabled),
+  .habit-name-btn:active {
+    transform: scale(0.96);
+  }
 }
 
 /* =========================================================================
@@ -2343,16 +2402,33 @@ body.is-reordering * {
   }
 
   .app {
-    padding: var(--space-3) var(--space-4) calc(var(--space-8) + 56px);
+    padding: var(--space-3) var(--space-4) calc(64px + env(safe-area-inset-bottom) + var(--space-4));
   }
 
   .app-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
     grid-template-columns: auto 1fr;
     grid-template-areas:
       "brand actions"
       "nav nav";
     gap: var(--space-3);
-    margin-bottom: var(--space-4);
+    margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-4)) var(--space-4);
+    padding: max(var(--space-3), env(safe-area-inset-top)) var(--space-4) var(--space-3);
+    background: var(--bg);
+  }
+
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: var(--space-1) var(--space-2) max(var(--space-1), env(safe-area-inset-bottom));
   }
 
   .brand-name {
@@ -2435,7 +2511,31 @@ body.is-reordering * {
   }
 
   .add-habit-btn {
-    width: 100%;
+    position: fixed;
+    right: var(--space-4);
+    bottom: calc(64px + env(safe-area-inset-bottom) + var(--space-3));
+    z-index: 15;
+    width: 56px;
+    height: 56px;
+    padding: 0;
+    border-style: none;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--on-accent);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .add-habit-btn svg {
+    font-size: 24px;
+  }
+
+  .add-habit-btn .btn-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 
   .progress-card,
@@ -2462,12 +2562,28 @@ body.is-reordering * {
   .dialog-backdrop {
     align-items: flex-end;
     padding: 0;
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
   }
 
   .dialog {
     max-width: none;
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding-top: var(--space-5);
     padding-bottom: max(var(--space-5), env(safe-area-inset-bottom));
+    position: relative;
+  }
+
+  .dialog::before {
+    content: "";
+    position: absolute;
+    top: var(--space-2);
+    left: 50%;
+    width: 36px;
+    height: 4px;
+    border-radius: var(--radius-pill);
+    background: var(--border-strong);
+    transform: translateX(-50%);
   }
 
   .dialog-actions .spacer {
