@@ -2,7 +2,9 @@ import {
   Controller,
   Post,
   Body,
+  Delete,
   Get,
+  HttpCode,
   Patch,
   UseGuards,
   Req,
@@ -16,6 +18,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { GoogleLoginDto } from './dto/google-login.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import { Throttle } from '@nestjs/throttler';
 import { AUTH_THROTTLE } from '../throttle.constants';
 
@@ -48,6 +51,17 @@ export class AuthController {
     @Body() dto: UpdateProfileDto,
   ) {
     return this.authService.updateProfile(req.user.sub, req.user.email, dto);
+  }
+
+  @Throttle(AUTH_THROTTLE)
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(204)
+  @Delete('account')
+  deleteAccount(
+    @Req() req: { user: { sub: number; email: string } },
+    @Body() dto: DeleteAccountDto,
+  ) {
+    return this.authService.deleteAccount(req.user.sub, dto.password);
   }
 
   @Throttle(AUTH_THROTTLE)

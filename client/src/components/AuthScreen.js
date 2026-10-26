@@ -347,14 +347,18 @@ function GoogleTrouble() {
 export function SessionNotice({ notice, onDismiss }) {
   if (!notice) return null;
   const expired = notice === 'expired';
+  const deleted = notice === 'deleted';
+  const icon = expired ? <FiClock /> : deleted ? <FiCheck /> : <FiAlertCircle />;
+  const title = expired ? t.sessionExpiredTitle : deleted ? t.accountDeletedTitle : null;
+  const body = expired ? t.sessionExpired : deleted ? t.accountDeleted : t.googleFailed;
   return (
-    <div className={`notice-banner${expired ? ' is-warning' : ' is-error'}`} role="alert">
+    <div className={`notice-banner${expired ? ' is-warning' : deleted ? ' is-success' : ' is-error'}`} role="alert">
       <span className="notice-icon" aria-hidden="true">
-        {expired ? <FiClock /> : <FiAlertCircle />}
+        {icon}
       </span>
       <div className="notice-body">
-        {expired ? <p className="notice-title">{t.sessionExpiredTitle}</p> : null}
-        <p>{expired ? t.sessionExpired : t.googleFailed}</p>
+        {title ? <p className="notice-title">{title}</p> : null}
+        <p>{body}</p>
       </div>
       <button type="button" className="icon-btn notice-close" onClick={onDismiss} aria-label={t.dismiss}>
         <FiX aria-hidden="true" />

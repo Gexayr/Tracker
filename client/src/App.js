@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, MotionConfig } from 'framer-motion';
 import { FiAlertTriangle, FiRefreshCw } from 'react-icons/fi';
-import { apiProfile, apiUpdateProfile } from './api';
+import { apiDeleteAccount, apiProfile, apiUpdateProfile } from './api';
 import { AddHabitToggle } from './components/AddHabitForm';
 import { AmountDialog } from './components/AmountDialog';
 import { ArchivedList } from './components/ArchivedList';
 import { AuthScreen } from './components/AuthScreen';
 import { BottomNav } from './components/BottomNav';
+import { DeleteAccountDialog } from './components/DeleteAccountDialog';
 import { HabitDialog } from './components/HabitDialog';
 import { HabitGrid } from './components/HabitGrid';
 import { Header } from './components/Header';
@@ -79,7 +80,8 @@ export default function App() {
   const [initial] = useState(initialSession);
   const [token, setToken] = useState(initial.token);
   const [email, setEmail] = useState('');
-  const [notice, setNotice] = useState(initial.notice); // '' | 'expired' | 'google'
+  const [hasPassword, setHasPassword] = useState(true);
+  const [notice, setNotice] = useState(initial.notice); // '' | 'expired' | 'google' | 'deleted'
   const [lang, setLangState] = useState(getLang);
   const now = useNow();
   const [ym, setYm] = useState(() => ({ year: now.getFullYear(), month: now.getMonth() }));
@@ -91,6 +93,7 @@ export default function App() {
   const [heatYear, setHeatYear] = useState(() => now.getFullYear());
   const [editingId, setEditingId] = useState(null);
   const [logging, setLogging] = useState(null); // { id, day } of a measurable habit
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [toast, setToast] = useState(null);
   const [announce, setAnnounce] = useState('');
   const [exporting, setExporting] = useState(false);
@@ -128,6 +131,7 @@ export default function App() {
     apiProfile(token, ctrl.signal)
       .then((p) => {
         if (p?.email) setEmail(p.email);
+        if (typeof p?.hasPassword === 'boolean') setHasPassword(p.hasPassword);
         const profileLang = rememberProfileLang(p?.locale);
         if (hasSavedLang()) {
           // An explicit choice (possibly made on the sign-in screen) wins; sync it.
@@ -149,6 +153,7 @@ export default function App() {
     safeStorage.set(TOKEN_KEY, tok);
     setNotice('');
     setEmail(mail || '');
+    setHasPassword(true); // corrected by the profile fetch once it lands
     setYm({ year: d.getFullYear(), month: d.getMonth() });
     setToken(tok);
   }, []);
@@ -157,6 +162,16 @@ export default function App() {
     flush();
     endSession('');
   }, [flush, endSession]);
+
+  /** Permanently deletes the account; throws on failure so the dialog can show the error. */
+  const deleteAccount = useCallback(
+    async (password) => {
+      await apiDeleteAccount(tokenRef.current, password);
+      setDeletingAccount(false);
+      endSession('deleted');
+    },
+    [endSession]
+  );
 
   const dismissToast = useCallback(() => setToast(null), []);
   const showToast = useCallback((message, extra = {}) => {
@@ -501,6 +516,7 @@ export default function App() {
           onCycleTheme={cycle}
           email={email}
           onLogout={logout}
+          onDeleteAccount={() => setDeletingAccount(true)}
           lang={lang}
           onLang={changeLang}
           onExport={exportCsv}
@@ -550,6 +566,14 @@ export default function App() {
                 monthData.setDayAmount(loggingHabit.id, logging.day, value);
                 setLogging(null);
               }}
+            />
+          ) : null}
+          {deletingAccount ? (
+            <DeleteAccountDialog
+              email={email}
+              hasPassword={hasPassword}
+              onClose={() => setDeletingAccount(false)}
+              onConfirm={deleteAccount}
             />
           ) : null}
         </AnimatePresence>

@@ -75,6 +75,14 @@ export const apiProfile = (token, signal) => request('/auth/profile', { token, s
 export const apiUpdateProfile = (token, changes) =>
   request('/auth/profile', { method: 'PATCH', token, body: changes });
 
+/** `password` is only required when the account has one (see `hasPassword` on the profile). */
+export const apiDeleteAccount = (token, password) =>
+  request('/auth/account', {
+    method: 'DELETE',
+    token,
+    body: password ? { password } : {},
+  });
+
 /** [{ year, month, payload }] for the months of `year` that exist. */
 export const apiGetYear = (year, token, signal) =>
   request(`/storage/year/${year}`, { token, signal, fallback: t.yearLoadFailed });

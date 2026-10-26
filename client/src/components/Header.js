@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { FiCheckSquare, FiChevronLeft, FiChevronRight, FiDownload, FiLogOut } from 'react-icons/fi';
+import { FiCheckSquare, FiChevronLeft, FiChevronRight, FiDownload, FiLogOut, FiTrash2 } from 'react-icons/fi';
 import { t } from '../i18n';
 import { formatMonthYear } from '../utils/date';
 import { LanguageSwitch } from './LanguageSwitch';
 import { SaveStatus } from './SaveStatus';
 import { ThemeToggle } from './ThemeToggle';
 
-function UserMenu({ email, onLogout, lang, onLang, onExport, exporting, year, month }) {
+function UserMenu({ email, onLogout, onDeleteAccount, lang, onLang, onExport, exporting, year, month }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -76,6 +76,17 @@ function UserMenu({ email, onLogout, lang, onLang, onExport, exporting, year, mo
           <button type="button" role="menuitem" className="menu-item" onClick={onLogout}>
             <FiLogOut aria-hidden="true" /> {t.logout}
           </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="menu-item menu-item-danger"
+            onClick={() => {
+              setOpen(false);
+              onDeleteAccount();
+            }}
+          >
+            <FiTrash2 aria-hidden="true" /> {t.deleteAccount}
+          </button>
         </div>
       )}
     </div>
@@ -95,6 +106,7 @@ export function Header({
   onCycleTheme,
   email,
   onLogout,
+  onDeleteAccount,
   lang,
   onLang,
   onExport,
@@ -137,6 +149,7 @@ export function Header({
         <UserMenu
           email={email}
           onLogout={onLogout}
+          onDeleteAccount={onDeleteAccount}
           lang={lang}
           onLang={onLang}
           onExport={onExport}

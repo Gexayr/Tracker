@@ -5,7 +5,7 @@ import * as bcrypt from 'bcryptjs';
 import { User } from './users.entity';
 import { normalizeEmail } from './email.util';
 
-export type SafeUser = Omit<User, 'passwordHash'>;
+export type SafeUser = Omit<User, 'passwordHash'> & { hasPassword: boolean };
 
 const PG_UNIQUE_VIOLATION = '23505';
 
@@ -18,9 +18,8 @@ function isUniqueViolation(e: unknown): boolean {
 }
 
 export function toSafeUser(user: User): SafeUser {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { passwordHash, ...safe } = user;
-  return safe;
+  return { ...safe, hasPassword: !!passwordHash };
 }
 
 @Injectable()
@@ -47,6 +46,17 @@ export class UsersService {
 
   findById(id: number): Promise<User | null> {
     return this.repo.findOne({ where: { id } });
+  }
+
+  /**
+   * Permanently deletes the user row. `Storage` has an `ON DELETE CASCADE`
+   * foreign key to `user` (see the init migration), so every month of their
+   * habit data is removed by the database in the same statement — no
+   * separate cleanup needed here.
+   */
+  async deleteById(id: number): Promise<boolean> {
+    const result = await this.repo.delete({ id });
+    return (result.affected ?? 0) > 0;
   }
 
   /** Updates UI preferences; returns false if the user does not exist. */

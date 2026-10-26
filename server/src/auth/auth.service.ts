@@ -61,12 +61,14 @@ export class AuthService {
   async getProfile(userId: number, email: string) {
     const user = await this.usersService.findById(userId);
     // Keep the old shape working even if the row is somehow gone.
-    if (!user) return { userId, email, name: null, locale: null };
+    if (!user)
+      return { userId, email, name: null, locale: null, hasPassword: false };
     return {
       userId: user.id,
       email: user.email,
       name: user.name ?? null,
       locale: user.locale ?? null,
+      hasPassword: !!user.passwordHash,
     };
   }
 
@@ -82,6 +84,28 @@ export class AuthService {
 
   async signToken(sub: number, email: string) {
     return this.jwtService.signAsync({ sub, email });
+  }
+
+  /**
+   * Permanently deletes the account and every month of habit data with it
+   * (cascades via the DB foreign key — see `UsersService.deleteById`). A
+   * password account must confirm with its current password first, since
+   * this is irreversible; a Google-only account has nothing to check it
+   * against, so the caller's JWT is treated as sufficient proof.
+   */
+  async deleteAccount(userId: number, password?: string): Promise<void> {
+    const user = await this.usersService.findById(userId);
+    if (!user) throw new NotFoundException('User not found');
+    if (user.passwordHash) {
+      if (!password) {
+        throw new UnauthorizedException(
+          'Enter your password to delete your account',
+        );
+      }
+      const ok = await bcrypt.compare(password, user.passwordHash);
+      if (!ok) throw new UnauthorizedException('Incorrect password');
+    }
+    await this.usersService.deleteById(userId);
   }
 
   /** Shared by POST /auth/google and the passport server-side OAuth callback. */
