@@ -40,6 +40,7 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-https://back-tracking.amsoft.am/auth/google/callback}
+      GOOGLE_EXTRA_CLIENT_IDS: ${GOOGLE_EXTRA_CLIENT_IDS:-}
       FRONTEND_REDIRECT_URL: ${FRONTEND_REDIRECT_URL:-}
       CORS_ORIGIN: ${CORS_ORIGIN:-https://tracking.amsoft.am}
     depends_on:

@@ -15,6 +15,16 @@ import { StorageService } from '../storage/storage.service';
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   private readonly googleClientId = (process.env.GOOGLE_CLIENT_ID ?? '').trim();
+  /** Comma-separated additional audiences `verifyIdToken` accepts besides
+   * `GOOGLE_CLIENT_ID` — e.g. the mobile app's own Google OAuth web client
+   * ID, which is distinct from the one the website's sign-in button uses. */
+  private readonly googleAudiences = [
+    this.googleClientId,
+    ...(process.env.GOOGLE_EXTRA_CLIENT_IDS ?? '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean),
+  ].filter(Boolean);
   private readonly googleClient = new OAuth2Client(
     this.googleClientId || undefined,
   );
@@ -127,7 +137,7 @@ export class AuthService {
     try {
       const ticket = await this.googleClient.verifyIdToken({
         idToken,
-        audience: this.googleClientId,
+        audience: this.googleAudiences,
       });
       payload = ticket.getPayload();
     } catch (e) {
